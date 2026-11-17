@@ -5,7 +5,7 @@ import {
   Home, Utensils, ShoppingBasket, Receipt, ArrowUpRight, Clock
 } from 'lucide-react';
 
-const API = 'http://localhost:4000/api';
+const API = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
 const money = n =>
   `৳${Number(n || 0).toLocaleString('en-BD', {
