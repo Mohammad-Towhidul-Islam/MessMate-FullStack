@@ -4,8 +4,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("postgresql://neondb_owner:npg_wcCVh3tKIJ0T@ep-raspy-forest-bdym2mvd-pooler.c-8.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require")
+  directUrl = env("postgresql://neondb_owner:npg_wcCVh3tKIJ0T@ep-raspy-forest-bdym2mvd.c-8.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require")
 }
 
 enum Role {
@@ -38,7 +39,6 @@ model Mess {
   currency     String        @default("BDT")
   joinCode     String        @unique @default(cuid())
   createdAt    DateTime      @default(now())
-
   users        User[]
   members      Member[]
   meals        MealEntry[]
@@ -50,14 +50,12 @@ model User {
   id           String   @id @default(cuid())
   messId       String
   mess         Mess     @relation(fields: [messId], references: [id])
-
   name         String
   email        String   @unique
   passwordHash String
   role         Role     @default(MEMBER)
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
-
   member       Member?
 }
 
@@ -65,15 +63,12 @@ model Member {
   id           String   @id @default(cuid())
   messId       String
   mess         Mess     @relation(fields: [messId], references: [id])
-
   userId       String?  @unique
   user         User?    @relation(fields: [userId], references: [id])
-
   name         String
   phone        String?
   joinedAt     DateTime @default(now())
   active       Boolean  @default(true)
-
   meals        MealEntry[]
   transactions Transaction[]
 }
@@ -82,15 +77,12 @@ model MealEntry {
   id        String   @id @default(cuid())
   messId    String
   mess      Mess     @relation(fields: [messId], references: [id])
-
   memberId  String
   member    Member   @relation(fields: [memberId], references: [id])
-
   date      DateTime @db.Date
   type      MealType
   quantity  Decimal  @db.Decimal(8, 2)
   note      String?
-
   createdBy String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -103,17 +95,14 @@ model Transaction {
   id              String            @id @default(cuid())
   messId          String
   mess            Mess              @relation(fields: [messId], references: [id])
-
   memberId        String?
   member          Member?           @relation(fields: [memberId], references: [id])
-
   type            TransactionType
   category        ExpenseCategory?
   amount          Decimal           @db.Decimal(12, 2)
   description     String
   transactionDate DateTime          @db.Date
   reference       String?
-
   reversedAt      DateTime?
   createdBy       String
   createdAt       DateTime          @default(now())
@@ -126,7 +115,6 @@ model MessSetting {
   id                  String   @id @default(cuid())
   messId              String   @unique
   mess                Mess     @relation(fields: [messId], references: [id])
-
   mealRate            Decimal  @default(0) @db.Decimal(10, 2)
   currency            String   @default("BDT")
   allowMemberMealEdit Boolean  @default(true)
