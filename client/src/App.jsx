@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   CalendarDays, Wallet, Users, LogOut, RefreshCw, Menu,
   Sun, Moon, Download, ChevronLeft, ChevronRight,
-  Home, Utensils, ShoppingBasket, Receipt, ArrowUpRight, Clock
+  Home, Utensils, ShoppingBasket, Receipt, ArrowUpRight, Clock, Pencil, Check, X
 } from 'lucide-react';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
@@ -63,6 +63,9 @@ export default function App() {
   const [dark, setDark] = useState(localStorage.getItem('mm_theme') !== 'light');
 
   const [members, setMembers] = useState([]);
+  const [editingMemberId, setEditingMemberId] = useState(null);
+  const [editMemberForm, setEditMemberForm] = useState({ name: '', phone: '' });
+  const [savingMember, setSavingMember] = useState(false);
   const [meals, setMeals] = useState([]);
   const [transactions, setTransactions] = useState([]);
 
@@ -301,6 +304,57 @@ export default function App() {
   const utilityShare = members.length
     ? utilityTotal / members.length
     : 0;
+
+  function startEditMember(member) {
+    setEditingMemberId(member.id);
+    setEditMemberForm({
+      name: member.name || '',
+      phone: member.phone || ''
+    });
+    setError('');
+    setNotice('');
+  }
+
+  function cancelEditMember() {
+    setEditingMemberId(null);
+    setEditMemberForm({ name: '', phone: '' });
+  }
+
+  async function saveMemberEdit(memberId) {
+    const name = editMemberForm.name.trim();
+    const phone = editMemberForm.phone.trim();
+
+    if (name.length < 2 || name.length > 80) {
+      setError('Member name must be between 2 and 80 characters.');
+      return;
+    }
+
+    if (phone.length > 30) {
+      setError('Phone number cannot exceed 30 characters.');
+      return;
+    }
+
+    setSavingMember(true);
+    setError('');
+    setNotice('');
+
+    try {
+      await request(`/members/${memberId}`, token, {
+        method: 'PATCH',
+        body: JSON.stringify({ name, phone })
+      });
+
+      setMembers(current => current.map(member =>
+        member.id === memberId ? { ...member, name, phone } : member
+      ));
+      cancelEditMember();
+      setNotice('Member name updated successfully. Meal history has been preserved.');
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSavingMember(false);
+    }
+  }
 
   async function saveMeal(memberId, date, type, value) {
     const quantity = Number(value || 0);
@@ -1171,7 +1225,15 @@ export default function App() {
                     />
                   </label>
 
-                  <label>
+                  <label
+                    className="full-width-field"
+                    style={{
+                      gridColumn: '1 / -1',
+                      flex: '1 1 100%',
+                      width: '100%',
+                      minWidth: 0
+                    }}
+                  >
                     Amount (BDT)
                     <input
                       type="number"
@@ -1182,6 +1244,13 @@ export default function App() {
                         ...market,
                         amount: e.target.value
                       })}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        maxWidth: '100%',
+                        minWidth: 0,
+                        boxSizing: 'border-box'
+                      }}
                       required
                     />
                   </label>
@@ -1373,7 +1442,8 @@ export default function App() {
 
           {page === 'Members' && canManage && (
             <div className="panel">
-              <h3>Members</h3>
+              <h3>Members ({members.length})</h3>
+              <p className="muted">Edit a member's name or phone number. Existing meal records will remain unchanged.</p>
 
               <div className="table-wrap">
                 <table>
@@ -1383,20 +1453,83 @@ export default function App() {
                       <th>Phone</th>
                       <th>Status</th>
                       <th>Joined</th>
+                      <th>Action</th>
                     </tr>
                   </thead>
 
                   <tbody>
                     {members.map(member => (
                       <tr key={member.id}>
-                        <td><b>{member.name}</b></td>
-                        <td>{member.phone || '—'}</td>
+                        <td>
+                          {editingMemberId === member.id ? (
+                            <input
+                              type="text"
+                              value={editMemberForm.name}
+                              onChange={e => setEditMemberForm(v => ({ ...v, name: e.target.value }))}
+                              minLength="2"
+                              maxLength="80"
+                              autoFocus
+                              aria-label="Member name"
+                            />
+                          ) : (
+                            <b>{member.name}</b>
+                          )}
+                        </td>
+                        <td>
+                          {editingMemberId === member.id ? (
+                            <input
+                              type="tel"
+                              value={editMemberForm.phone}
+                              onChange={e => setEditMemberForm(v => ({ ...v, phone: e.target.value }))}
+                              maxLength="30"
+                              placeholder="Phone number"
+                              aria-label="Member phone"
+                            />
+                          ) : (
+                            member.phone || '—'
+                          )}
+                        </td>
                         <td>{member.active ? 'Active' : 'Inactive'}</td>
                         <td>
-                          {new Date(member.joinedAt).toLocaleDateString()}
+                          {member.joinedAt ? new Date(member.joinedAt).toLocaleDateString() : '—'}
+                        </td>
+                        <td>
+                          {editingMemberId === member.id ? (
+                            <div className="member-edit-actions" style={{ display: 'flex', gap: '8px' }}>
+                              <button
+                                type="button"
+                                className="primary"
+                                disabled={savingMember}
+                                onClick={() => saveMemberEdit(member.id)}
+                              >
+                                <Check size={15} /> {savingMember ? 'Saving…' : 'Save'}
+                              </button>
+                              <button
+                                type="button"
+                                className="secondary-btn"
+                                disabled={savingMember}
+                                onClick={cancelEditMember}
+                              >
+                                <X size={15} /> Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="secondary-btn"
+                              onClick={() => startEditMember(member)}
+                            >
+                              <Pencil size={15} /> Edit
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
+                    {members.length === 0 && (
+                      <tr>
+                        <td colSpan="5" className="muted">No members found.</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
