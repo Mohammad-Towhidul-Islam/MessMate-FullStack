@@ -1,0 +1,17 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: messmate
+      POSTGRES_USER: messmate
+      POSTGRES_PASSWORD: messmate_dev_password
+    ports: ["5432:5432"]
+    volumes: [messmate_pg:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U messmate -d messmate"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  messmate_pg:
