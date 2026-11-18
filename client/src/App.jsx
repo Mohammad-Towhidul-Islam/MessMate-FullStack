@@ -1018,7 +1018,7 @@ export default function App() {
                   value={year}
                   onChange={e => setYear(Number(e.target.value))}
                 >
-                  {[year - 2, year - 1, year, year + 1].map(y => (
+                  {Array.from({ length: 7 }, (_, i) => 2024 + i).map(y => (
                     <option key={y} value={y}>{y}</option>
                   ))}
                 </select>
