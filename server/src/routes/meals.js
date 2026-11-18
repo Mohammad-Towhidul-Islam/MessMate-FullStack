@@ -6,27 +6,64 @@ import { roles } from '../middleware/auth.js';
 
 const r = Router();
 
+// Convert date-only query values into UTC day boundaries.
+// Example: to=2026-11-30 includes the entire 30 November.
+function parseDateBoundary(value, endOfDay = false) {
+  if (!value) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const suffix = endOfDay
+      ? 'T23:59:59.999Z'
+      : 'T00:00:00.000Z';
+
+    const date = new Date(`${value}${suffix}`);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+// Meal quantity supports 0.25, 0.50, 0.75, 1.00, etc.
 const mealSchema = z.object({
   memberId: z.string().min(1),
   date: z.coerce.date(),
   type: z.enum(['DAY', 'NIGHT']),
-  quantity: z.number().min(0).max(10),
+  quantity: z.number()
+    .min(0)
+    .max(10)
+    .refine(
+      value => Math.abs(value * 4 - Math.round(value * 4)) < 0.0000001,
+      'Meal quantity must be in increments of 0.25'
+    ),
   note: z.string().max(200).optional()
 });
 
-// Get meals for a selected date range
+// GET /meals?from=YYYY-MM-DD&to=YYYY-MM-DD
+// Get all meals in the selected date range.
 r.get('/', async (req, res) => {
   try {
-    const from = req.query.from
-      ? new Date(req.query.from)
-      : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const today = new Date();
 
-    const to = req.query.to
-      ? new Date(req.query.to)
-      : new Date();
+    const fromValue = req.query.from ||
+      `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}-01`;
 
-    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
-      return res.status(400).json({ error: 'Invalid date range' });
+    const toValue = req.query.to ||
+      today.toISOString().slice(0, 10);
+
+    const from = parseDateBoundary(String(fromValue), false);
+    const to = parseDateBoundary(String(toValue), true);
+
+    if (!from || !to) {
+      return res.status(400).json({
+        error: 'Invalid date range'
+      });
+    }
+
+    if (from > to) {
+      return res.status(400).json({
+        error: 'Start date cannot be after end date'
+      });
     }
 
     const rows = await prisma.mealEntry.findMany({
@@ -52,14 +89,19 @@ r.get('/', async (req, res) => {
       ]
     });
 
-    res.json(rows);
+    return res.json(rows);
+
   } catch (error) {
     console.error('Get meals error:', error);
-    res.status(500).json({ error: 'Failed to load meals' });
+
+    return res.status(500).json({
+      error: 'Failed to load meals'
+    });
   }
 });
 
-// Add or update a meal entry
+// POST /meals
+// Add or update a member's meal entry.
 r.post('/', async (req, res) => {
   try {
     const parsed = mealSchema.safeParse(req.body);
@@ -73,6 +115,12 @@ r.post('/', async (req, res) => {
 
     const data = parsed.data;
 
+    if (!req.user?.messId || !req.user?.sub) {
+      return res.status(401).json({
+        error: 'Invalid user session. Please login again.'
+      });
+    }
+
     const member = await prisma.member.findFirst({
       where: {
         id: data.memberId,
@@ -83,7 +131,7 @@ r.post('/', async (req, res) => {
 
     if (!member) {
       return res.status(404).json({
-        error: 'Member not found'
+        error: 'Member not found or inactive'
       });
     }
 
@@ -124,20 +172,31 @@ r.post('/', async (req, res) => {
       update: {
         quantity: data.quantity,
         note: data.note
+      },
+
+      include: {
+        member: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
       }
     });
 
-    res.status(201).json(meal);
+    return res.status(201).json(meal);
 
   } catch (error) {
     console.error('Save meal error:', error);
-    res.status(500).json({
+
+    return res.status(500).json({
       error: 'Failed to save meal'
     });
   }
 });
 
-// Delete a meal entry
+// DELETE /meals/:id
+// Delete a meal entry (Admin/Manager only).
 r.delete('/:id', roles('ADMIN', 'MANAGER'), async (req, res) => {
   try {
     const meal = await prisma.mealEntry.findFirst({
@@ -159,14 +218,15 @@ r.delete('/:id', roles('ADMIN', 'MANAGER'), async (req, res) => {
       }
     });
 
-    res.json({
+    return res.json({
       ok: true,
       message: 'Meal entry deleted successfully'
     });
 
   } catch (error) {
     console.error('Delete meal error:', error);
-    res.status(500).json({
+
+    return res.status(500).json({
       error: 'Failed to delete meal'
     });
   }
