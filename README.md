@@ -1,7 +1,7 @@
 # MessMate — Full-stack Mess Management
 EMAIL: admin@messmate.local
 Password: ChangeMe123!
-
+https://messmate-fullstack-eight.vercel.app/
 A JavaScript monorepo starter for a real mess-management workflow:
 - React + Vite + Tailwind client
 - Node.js + Express API
