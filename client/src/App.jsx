@@ -2000,7 +2000,22 @@ export default function App() {
                   <p className="muted">Share this code with people who should create an account and join this workspace.</p>
                   {inviteInfo ? (
                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-                      <code style={{ padding: '10px 14px', borderRadius: '8px', background: 'var(--input-bg, #f2f4f7)', fontSize: '1rem' }}>{inviteInfo.inviteCode}</code>
+                      <code
+                        style={{
+                          display: 'inline-block',
+                          padding: '10px 14px',
+                          borderRadius: '8px',
+                          background: '#ffffff',
+                          color: '#111827',
+                          border: '1px solid #d1d5db',
+                          fontSize: '1rem',
+                          fontWeight: 700,
+                          letterSpacing: '0.06em',
+                          opacity: 1
+                        }}
+                      >
+                        {inviteInfo.inviteCode}
+                      </code>
                       <button type="button" className="secondary-btn" onClick={copyInviteCode}>Copy code</button>
                       <button type="button" className="secondary-btn" onClick={copyInviteLink}>Copy share link</button>
                     </div>
