@@ -58,19 +58,14 @@ function hasSnapshot(metadata, key) {
 }
 
 function getSnapshot(metadata, key) {
-  return metadata[key];
+  return metadata?.[key] ?? null;
 }
 
-// Compare the actual meal data.
-// Version is checked separately.
 function sameMealState(a, b) {
-  if (!a || !b) {
-    return a === b;
-  }
+  if (!a || !b) return a === b;
 
   return (
     a.id === b.id &&
-    (!a.messId || !b.messId || a.messId === b.messId) &&
     a.memberId === b.memberId &&
     new Date(a.date).getTime() ===
       new Date(b.date).getTime() &&
@@ -94,8 +89,14 @@ async function writeAudit(tx, req, action, entityId, metadata) {
   });
 }
 
+function isConflict(error) {
+  return error.code === 'P2034' ||
+    error.code === 'P2002' ||
+    error.status === 409;
+}
+
 // =====================================
-// APPLY SAFE MEAL TRANSITION
+// SAFE MEAL TRANSITION
 // =====================================
 
 async function applyTransition(
@@ -111,7 +112,6 @@ async function applyTransition(
     throw conflict('Invalid meal history record.');
   }
 
-  // Always scope the meal to the current mess.
   const current = await tx.mealEntry.findFirst({
     where: {
       id: mealId,
@@ -121,31 +121,26 @@ async function applyTransition(
 
   const currentSnapshot = makeSnapshot(current);
 
-  // Verify that the current state is exactly the state
-  // produced by the activity we are trying to reverse.
+  // Verify current meal state.
   if (!sameMealState(currentSnapshot, expectedState)) {
     throw conflict(
       'This meal has changed since the activity. Undo/Redo is no longer safe.'
     );
   }
 
-  // Check optimistic concurrency version.
-  if (current) {
-    if (
-      expectedVersion !== null &&
-      expectedVersion !== undefined &&
-      current.version !== expectedVersion
-    ) {
-      throw conflict(
-        'Meal version mismatch. Someone may have changed this meal.'
-      );
-    }
+  // Verify version.
+  if (
+    current &&
+    expectedVersion !== null &&
+    expectedVersion !== undefined &&
+    current.version !== expectedVersion
+  ) {
+    throw conflict(
+      'Meal version mismatch. Someone may have changed this meal.'
+    );
   }
 
-  // ---------------------------------
-  // TARGET NULL: DELETE MEAL
-  // ---------------------------------
-
+  // Target is null: delete current meal.
   if (targetState === null) {
     if (!current) {
       throw conflict('The meal is already deleted.');
@@ -160,18 +155,13 @@ async function applyTransition(
     });
 
     if (deleted.count !== 1) {
-      throw conflict(
-        'Meal changed during this operation. Refresh and retry.'
-      );
+      throw conflict('Meal changed during this operation.');
     }
 
     return null;
   }
 
-  // ---------------------------------
-  // CURRENT NULL: RECREATE MEAL
-  // ---------------------------------
-
+  // Current meal is missing: recreate it.
   if (!current) {
     const member = await tx.member.findFirst({
       where: {
@@ -203,10 +193,7 @@ async function applyTransition(
     return makeSnapshot(created);
   }
 
-  // ---------------------------------
-  // UPDATE EXISTING MEAL
-  // ---------------------------------
-
+  // Update existing meal.
   const updated = await tx.mealEntry.updateMany({
     where: {
       id: current.id,
@@ -227,9 +214,7 @@ async function applyTransition(
   });
 
   if (updated.count !== 1) {
-    throw conflict(
-      'Meal changed during this operation. Refresh and retry.'
-    );
+    throw conflict('Meal changed during this operation.');
   }
 
   const saved = await tx.mealEntry.findFirst({
@@ -287,12 +272,9 @@ router.get('/', async (req, res, next) => {
         take: limit
       }),
 
-      prisma.auditLog.count({
-        where
-      })
+      prisma.auditLog.count({ where })
     ]);
 
-    // Fetch actor information without exposing sensitive data.
     const userIds = [
       ...new Set(logs.map(log => log.userId))
     ];
@@ -334,9 +316,8 @@ router.get('/', async (req, res, next) => {
       isMine: log.userId === req.user.sub
     }));
 
-    res.json({
+    return res.json({
       activities,
-
       pagination: {
         page,
         limit,
@@ -358,7 +339,6 @@ router.post('/:logId/undo', async (req, res, next) => {
   try {
     const result = await prisma.$transaction(
       async (tx) => {
-        // Find original activity in this mess.
         const original = await tx.auditLog.findFirst({
           where: {
             id: req.params.logId,
@@ -371,7 +351,7 @@ router.post('/:logId/undo', async (req, res, next) => {
           throw httpError('Activity not found.', 404);
         }
 
-        // Only the original actor can undo.
+        // Only original actor can undo.
         if (original.userId !== req.user.sub) {
           throw httpError(
             'You can only undo your own meal changes.',
@@ -387,9 +367,7 @@ router.post('/:logId/undo', async (req, res, next) => {
         ];
 
         if (!allowedActions.includes(original.action)) {
-          throw conflict(
-            'This activity cannot be undone.'
-          );
+          throw conflict('This activity cannot be undone.');
         }
 
         const metadata = original.metadata;
@@ -406,7 +384,7 @@ router.post('/:logId/undo', async (req, res, next) => {
         const before = getSnapshot(metadata, 'before');
         const after = getSnapshot(metadata, 'after');
 
-        // Find previous undo/redo operations for this meal.
+        // Get previous undo/redo records.
         const relatedLogs = await tx.auditLog.findMany({
           where: {
             messId: req.user.messId,
@@ -428,37 +406,48 @@ router.post('/:logId/undo', async (req, res, next) => {
             log.metadata?.undoOfAuditLogId === original.id
         );
 
-        const latestUndo = undoLogs.at(-1);
+        const latestUndo = undoLogs.length
+          ? undoLogs[undoLogs.length - 1]
+          : null;
 
+        let expectedState = after;
+        let expectedVersion =
+          metadata.afterVersion ?? after?.version ?? null;
+
+        // If the previous undo was redone, use the
+        // latest redo state and version for another undo.
         if (latestUndo) {
-          const alreadyRedone = relatedLogs.some(
+          const latestRedo = relatedLogs.find(
             log =>
               log.action === 'REDO' &&
               log.metadata?.undoLogId === latestUndo.id
           );
 
-          if (!alreadyRedone) {
+          if (!latestRedo) {
             throw conflict(
               'This activity has already been undone.'
             );
           }
-        }
 
-        // Apply inverse of original operation.
-        const expectedVersion =
-          metadata.afterVersion ??
-          after?.version ??
-          null;
+          expectedState = getSnapshot(
+            latestRedo.metadata,
+            'after'
+          );
+
+          expectedVersion =
+            latestRedo.metadata?.afterVersion ??
+            expectedState?.version ??
+            null;
+        }
 
         const newState = await applyTransition(
           tx,
           req.user.messId,
-          after,
+          expectedState,
           expectedVersion,
           before
         );
 
-        // Append a new activity. Never delete old history.
         const undoLog = await writeAudit(
           tx,
           req,
@@ -466,7 +455,7 @@ router.post('/:logId/undo', async (req, res, next) => {
           original.entityId,
           {
             undoOfAuditLogId: original.id,
-            before: after,
+            before: expectedState,
             after: newState,
             beforeVersion: expectedVersion,
             afterVersion: newState?.version ?? null
@@ -484,17 +473,11 @@ router.post('/:logId/undo', async (req, res, next) => {
       }
     );
 
-    res.json(result);
+    return res.json(result);
   } catch (error) {
-    if (error.code === 'P2034') {
+    if (isConflict(error)) {
       return res.status(409).json({
-        error: 'Concurrent activity detected. Refresh and retry.'
-      });
-    }
-
-    if (error.code === 'P2002') {
-      return res.status(409).json({
-        error: 'A conflicting meal already exists.'
+        error: error.message || 'Conflicting meal operation.'
       });
     }
 
@@ -511,7 +494,6 @@ router.post('/:logId/undo', async (req, res, next) => {
 // =====================================
 // REDO UNDO OPERATION
 // POST /api/activity/:logId/redo
-//
 // logId = UNDO activity ID
 // =====================================
 
@@ -519,7 +501,6 @@ router.post('/:logId/redo', async (req, res, next) => {
   try {
     const result = await prisma.$transaction(
       async (tx) => {
-        // Find the undo operation.
         const undoLog = await tx.auditLog.findFirst({
           where: {
             id: req.params.logId,
@@ -530,13 +511,10 @@ router.post('/:logId/redo', async (req, res, next) => {
         });
 
         if (!undoLog) {
-          throw httpError(
-            'Undo activity not found.',
-            404
-          );
+          throw httpError('Undo activity not found.', 404);
         }
 
-        // Only the user who performed Undo can Redo it.
+        // Only the user who performed Undo can Redo.
         if (undoLog.userId !== req.user.sub) {
           throw httpError(
             'You can only redo your own undo operation.',
@@ -548,12 +526,9 @@ router.post('/:logId/redo', async (req, res, next) => {
         const originalId = metadata.undoOfAuditLogId;
 
         if (!originalId) {
-          throw conflict(
-            'Undo history is incomplete.'
-          );
+          throw conflict('Undo history is incomplete.');
         }
 
-        // Verify original activity ownership.
         const original = await tx.auditLog.findFirst({
           where: {
             id: originalId,
@@ -563,9 +538,7 @@ router.post('/:logId/redo', async (req, res, next) => {
         });
 
         if (!original || original.userId !== req.user.sub) {
-          throw conflict(
-            'Original activity is unavailable.'
-          );
+          throw conflict('Original activity is unavailable.');
         }
 
         if (
@@ -577,19 +550,27 @@ router.post('/:logId/redo', async (req, res, next) => {
           );
         }
 
-        // Check whether this exact Undo was already redone.
-        const existingRedo = await tx.auditLog.findFirst({
+        // Check whether this Undo was already redone.
+        const relatedLogs = await tx.auditLog.findMany({
           where: {
             messId: req.user.messId,
             entity: 'MEAL',
             entityId: undoLog.entityId,
-            action: 'REDO',
-            metadata: {
-              path: ['undoLogId'],
-              equals: undoLog.id
+            action: {
+              in: ['UNDO', 'REDO']
             }
-          }
+          },
+          orderBy: [
+            { createdAt: 'asc' },
+            { id: 'asc' }
+          ]
         });
+
+        const existingRedo = relatedLogs.some(
+          log =>
+            log.action === 'REDO' &&
+            log.metadata?.undoLogId === undoLog.id
+        );
 
         if (existingRedo) {
           throw conflict(
@@ -597,18 +578,12 @@ router.post('/:logId/redo', async (req, res, next) => {
           );
         }
 
-        // A later undo means this is no longer the latest operation.
-        const laterUndo = await tx.auditLog.findFirst({
-          where: {
-            messId: req.user.messId,
-            entity: 'MEAL',
-            entityId: undoLog.entityId,
-            action: 'UNDO',
-            createdAt: {
-              gt: undoLog.createdAt
-            }
-          }
-        });
+        // A newer undo must be handled first.
+        const laterUndo = relatedLogs.some(
+          log =>
+            log.action === 'UNDO' &&
+            log.createdAt > undoLog.createdAt
+        );
 
         if (laterUndo) {
           throw conflict(
@@ -616,9 +591,6 @@ router.post('/:logId/redo', async (req, res, next) => {
           );
         }
 
-        // After Undo:
-        // metadata.after = current restored state
-        // metadata.before = state to reapply
         const expected = getSnapshot(metadata, 'after');
         const target = getSnapshot(metadata, 'before');
 
@@ -635,7 +607,6 @@ router.post('/:logId/redo', async (req, res, next) => {
           target
         );
 
-        // Append a new REDO log.
         const redoLog = await writeAudit(
           tx,
           req,
@@ -662,17 +633,11 @@ router.post('/:logId/redo', async (req, res, next) => {
       }
     );
 
-    res.json(result);
+    return res.json(result);
   } catch (error) {
-    if (error.code === 'P2034') {
+    if (isConflict(error)) {
       return res.status(409).json({
-        error: 'Concurrent activity detected. Refresh and retry.'
-      });
-    }
-
-    if (error.code === 'P2002') {
-      return res.status(409).json({
-        error: 'A conflicting meal already exists.'
+        error: error.message || 'Conflicting meal operation.'
       });
     }
 

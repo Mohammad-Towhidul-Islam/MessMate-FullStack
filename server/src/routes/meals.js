@@ -12,9 +12,9 @@ const router = Router();
 
 const mealSchema = z.object({
   memberId: z.string().min(1),
-  date: z.string().min(1),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
   type: z.enum(['DAY', 'NIGHT']),
-  quantity: z.coerce.number().min(0).max(10),
+  quantity: z.coerce.number().finite().min(0).max(10),
   note: z.string().max(500).nullable().optional()
 });
 
@@ -56,21 +56,8 @@ function makeSnapshot(meal) {
     createdBy: meal.createdBy,
     createdAt: meal.createdAt.toISOString(),
     updatedAt: meal.updatedAt.toISOString(),
-    version: meal.version ?? 0
+    version: meal.version
   };
-}
-
-async function writeAudit(tx, req, action, entityId, metadata) {
-  return tx.auditLog.create({
-    data: {
-      messId: req.user.messId,
-      userId: req.user.sub,
-      action,
-      entity: 'MEAL',
-      entityId,
-      metadata
-    }
-  });
 }
 
 function canManageMeals(user) {
@@ -89,12 +76,43 @@ function mealUniqueWhere(memberId, date, type) {
 
 function sendConflict(res, message) {
   return res.status(409).json({
-    error: message || 'Meal was changed by another request. Please refresh and try again.'
+    error: message ||
+      'Meal was changed by another request. Please refresh and try again.'
   });
 }
 
+async function writeAudit(tx, req, action, entityId, metadata) {
+  return tx.auditLog.create({
+    data: {
+      messId: req.user.messId,
+      userId: req.user.sub,
+      action,
+      entity: 'MEAL',
+      entityId,
+      metadata
+    }
+  });
+}
+
+const mealInclude = {
+  member: {
+    select: {
+      id: true,
+      name: true
+    }
+  }
+};
+
+function isConflictError(error) {
+  return (
+    error.code === 'P2002' ||
+    error.code === 'P2034' ||
+    error.status === 409
+  );
+}
+
 // =====================================
-// GET MEALS
+// GET ALL MEALS
 // =====================================
 
 router.get('/', async (req, res, next) => {
@@ -145,14 +163,7 @@ router.get('/', async (req, res, next) => {
 
     const meals = await prisma.mealEntry.findMany({
       where,
-      include: {
-        member: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
-      },
+      include: mealInclude,
       orderBy: [
         { date: 'asc' },
         { member: { name: 'asc' } },
@@ -160,7 +171,7 @@ router.get('/', async (req, res, next) => {
       ]
     });
 
-    res.json(meals);
+    return res.json(meals);
   } catch (error) {
     next(error);
   }
@@ -197,7 +208,7 @@ router.post('/', async (req, res, next) => {
       });
     }
 
-    // Check active member and mess ownership.
+    // Check member ownership and active status.
     const member = await prisma.member.findFirst({
       where: {
         id: memberId,
@@ -212,7 +223,7 @@ router.post('/', async (req, res, next) => {
       });
     }
 
-    // Members can edit only their own meals when enabled.
+    // Normal members can edit only their own meals.
     if (!canManageMeals(req.user)) {
       const setting = await prisma.messSetting.findUnique({
         where: {
@@ -238,10 +249,7 @@ router.post('/', async (req, res, next) => {
 
         const before = makeSnapshot(existing);
 
-        // ---------------------------------
-        // EXISTING MEAL: UPDATE
-        // ---------------------------------
-
+        // Existing meal: update.
         if (existing) {
           const unchanged =
             Number(existing.quantity) === quantity &&
@@ -252,19 +260,10 @@ router.post('/', async (req, res, next) => {
               where: {
                 id: existing.id
               },
-              include: {
-                member: {
-                  select: {
-                    id: true,
-                    name: true
-                  }
-                }
-              }
+              include: mealInclude
             });
           }
 
-          // Optimistic concurrency control.
-          // Only update if the version is still the same.
           const updated = await tx.mealEntry.updateMany({
             where: {
               id: existing.id,
@@ -288,13 +287,8 @@ router.post('/', async (req, res, next) => {
             error.status = 409;
             throw error;
           }
-        }
-
-        // ---------------------------------
-        // NEW MEAL: CREATE
-        // ---------------------------------
-
-        else {
+        } else {
+          // New meal: create.
           await tx.mealEntry.create({
             data: {
               messId: req.user.messId,
@@ -309,20 +303,9 @@ router.post('/', async (req, res, next) => {
           });
         }
 
-        // ---------------------------------
-        // GET SAVED MEAL
-        // ---------------------------------
-
         const savedMeal = await tx.mealEntry.findUnique({
           where: mealUniqueWhere(memberId, mealDate, type),
-          include: {
-            member: {
-              select: {
-                id: true,
-                name: true
-              }
-            }
-          }
+          include: mealInclude
         });
 
         if (!savedMeal) {
@@ -331,10 +314,7 @@ router.post('/', async (req, res, next) => {
 
         const after = makeSnapshot(savedMeal);
 
-        // ---------------------------------
-        // WRITE ACTIVITY HISTORY
-        // ---------------------------------
-
+        // Record activity.
         await writeAudit(
           tx,
           req,
@@ -355,13 +335,9 @@ router.post('/', async (req, res, next) => {
       }
     );
 
-    res.status(200).json(result);
+    return res.status(200).json(result);
   } catch (error) {
-    if (
-      error.code === 'P2002' ||
-      error.code === 'P2034' ||
-      error.status === 409
-    ) {
+    if (isConflictError(error)) {
       return sendConflict(
         res,
         'Meal was changed by another request. Refresh and try again.'
@@ -397,7 +373,6 @@ router.delete(
 
           const before = makeSnapshot(meal);
 
-          // Delete only if the version has not changed.
           const deleted = await tx.mealEntry.deleteMany({
             where: {
               id: meal.id,
@@ -415,7 +390,6 @@ router.delete(
             throw error;
           }
 
-          // Record deletion in activity history.
           await writeAudit(
             tx,
             req,
@@ -442,14 +416,11 @@ router.delete(
         });
       }
 
-      res.json({
+      return res.json({
         message: 'Meal deleted. It can be restored from Activity History.'
       });
     } catch (error) {
-      if (
-        error.code === 'P2034' ||
-        error.status === 409
-      ) {
+      if (isConflictError(error)) {
         return sendConflict(
           res,
           'Meal was changed by another request. Refresh and try again.'
@@ -494,12 +465,19 @@ router.post(
           }
 
           const data = deleteLog.metadata.before;
+          const originalDate = new Date(data.date);
 
-          // Check if the meal already exists.
+          if (Number.isNaN(originalDate.getTime())) {
+            return {
+              error: 'Invalid saved meal date',
+              status: 400
+            };
+          }
+
           const existing = await tx.mealEntry.findUnique({
             where: mealUniqueWhere(
               data.memberId,
-              new Date(data.date),
+              originalDate,
               data.type
             )
           });
@@ -511,7 +489,6 @@ router.post(
             };
           }
 
-          // Check member still belongs to this mess.
           const member = await tx.member.findFirst({
             where: {
               id: data.memberId,
@@ -526,30 +503,21 @@ router.post(
             };
           }
 
-          // Recreate the deleted meal.
           const restored = await tx.mealEntry.create({
             data: {
               id: data.id,
               messId: req.user.messId,
               memberId: data.memberId,
-              date: new Date(data.date),
+              date: originalDate,
               type: data.type,
               quantity: data.quantity,
               note: data.note ?? null,
               createdBy: data.createdBy,
               version: (data.version ?? 0) + 1
             },
-            include: {
-              member: {
-                select: {
-                  id: true,
-                  name: true
-                }
-              }
-            }
+            include: mealInclude
           });
 
-          // Every restore gets a new history entry.
           await writeAudit(
             tx,
             req,
@@ -579,15 +547,12 @@ router.post(
         });
       }
 
-      res.json({
+      return res.json({
         message: 'Meal restored successfully',
         meal: result.meal
       });
     } catch (error) {
-      if (
-        error.code === 'P2002' ||
-        error.code === 'P2034'
-      ) {
+      if (isConflictError(error)) {
         return sendConflict(
           res,
           'A conflicting meal operation occurred. Refresh and try again.'
