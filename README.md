@@ -1,59 +1,114 @@
-# MessMate — Full-stack Mess Management
-EMAIL: admin@messmate.local
-Password: ChangeMe123!
-https://messmate-fullstack-eight.vercel.app/
-A JavaScript monorepo starter for a real mess-management workflow:
-- React + Vite + Tailwind client
-- Node.js + Express API
-- PostgreSQL + Prisma ORM
-- Zod request validation
-- JWT auth, role checks, audit-friendly transaction records
-- Excel-style 12-month Day/Night meal register with editable daily cells and daily market-cost row
-- Deposits, expenses, member management and monthly member settlement summary
+Live Website: https://messmate-fullstack-eight.vercel.app/
 
-## Requirements
-- Node.js 20+
-- Docker Desktop (recommended) or PostgreSQL 15+
-- npm
-
-## Quick start
-1. Copy `server/.env.example` to `server/.env` and set a long random `JWT_SECRET`.
-2. Start PostgreSQL: `docker compose up -d db`
-3. Install dependencies: `npm install`
-4. Create DB schema: `npm run db:migrate`
-5. Create first admin: `npm run seed`
-6. Start API + client: `npm run dev`
-
-Client: http://localhost:5173  
-API: http://localhost:4000/api  
-Health: http://localhost:4000/api/health
-
-Seed login:
+MessMate is a full-stack web-based mess management platform designed to simplify daily meal tracking, market expenses, member management, deposits, and monthly financial settlements.
 - Email: admin@messmate.local
 - Password: ChangeMe123!
-Change the password immediately for any non-demo environment.
+Security Notice: These are demo seed credentials. Change the password immediately before using the application in a real environment.
+- User Authentication: JWT-based authentication with role-based access control.
+- Member Management: Manage mess members and their accounts.
+- Daily Meal Tracking: Excel-style 12-month Day/Night meal register.
+- Market Expense Management: Record daily market costs.
+- Deposit Management: Track member deposits and balances.
+- Transaction Management: Manage expenses and financial transactions.
+- Monthly Settlement: Calculate meal costs, member expenses, Due, and Return.
+- Historical Records: View monthly meal and accounting records.
+- Student Registration: Students can register using a mess invitation code.
+- Data Validation: Zod-based request validation.
+- Audit-Friendly Records: Financial transactions support adjustment and reversal workflows.
+Component	Technology
+Frontend	React, Vite, Tailwind CSS
+Backend	Node.js, Express.js
+Database	PostgreSQL
+ORM	Prisma
+Authentication	JWT
+Validation	Zod
+Package Manager	npm
+```
+MessMate/
+│
+├── client/              # React frontend
+├── server/              # Express backend and API
+│   ├── prisma/          # Database schema
+│   └── ...
+│
+├── docs/
+│   └── ACCOUNTING.md    # Accounting rules and assumptions
+│
+├── docker-compose.yml
+└── package.json
+```
+- Node.js 20+
+- npm
+- Docker Desktop (recommended) or PostgreSQL 15+
+```
+git clone https://github.com/Mohammad-Towhidul-Islam/MessMate-FullStack.git
 
-## Project layout
-- `client/` React UI
-- `server/` Express API, Prisma schema and business logic
-- `docker-compose.yml` local PostgreSQL
-- `docs/ACCOUNTING.md` current accounting assumptions and unresolved Excel interpretation
+cd MessMate-FullStack
+```
+Copy:
+```
+server/.env.example
+```
+to:
+```
+server/.env
+```
+Configure your database connection and a strong, randomly generated JWT_SECRET.
+```
+docker compose up -d db
+```
+```
+npm install
+```
+```
+npm run db:migrate
+```
+```
+npm run seed
+```
+```
+npm run dev
+```
+Local Application URLs
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:4000/api
+- API Health: http://localhost:4000/api/health
+The monthly meal register follows an Excel-style structure with:
+- Member names
+- Day and Night meal entries
+- Daily meal quantities
+- Daily market costs
+- Individual meal totals
+- Meal rates
+- Member deposits
+- Due and Return calculations
+Users can select a month and year to access the 12-month historical archive.
 
-## Excel migration
-The supplied workbook has month sheets with member rows in Day/Night pairs and daily fractional values. The CSV is a month export with the same general structure. This starter does not silently import historical totals into live ledgers. First review and map the source columns using `docs/ACCOUNTING.md`; then import verified daily meal rows and deposits/expenses. Preserve the original files as read-only backups.
+The meal rate is calculated using recorded market expenses divided by total meal quantity.
+Students can create accounts from the sign-in page using a mess invitation code.
 
-## Important production checklist
-- Replace JWT secret and seed credentials.
-- Configure HTTPS, secure cookie/session strategy, CORS allowlist and backups.
-- Add a production mail provider for password reset/invitations.
-- Review the accounting rules with the mess treasurer before enabling settlement.
-- Run migrations and automated tests in CI before deployment.
-- Never hard-delete financial records; add reversal/adjustment entries instead.
+Demo Invitation Code: MESSMATE-JOIN
 
-This is a runnable full-stack MVP foundation, not a claim of audited or bug-free accounting software. Validate calculations against the mess's agreed rules before using it for real payments.
+Registration automatically creates a linked member profile.
 
-## Monthly sheet behavior
-The monthly grid follows the uploaded workbook layout: member name, Day/Night rows, day-number columns, daily market-cost row, member meal totals, meal cost, deposit and Due/Return. Month and year selectors provide a 12-month archive view. Meal rate is computed from recorded market expenses divided by total meal quantity. Utility bills are recorded separately and show an indicative equal split; do not treat that split as final settlement until the mess confirms its utility-sharing policy.
+For production use, replace the demo invitation code with a private code and share it only with authorized mess members.
+- Historical Excel data should be reviewed before importing.
+- Original Excel files should be preserved as read-only backups.
+- Financial records should not be hard-deleted.
+- Reversal and adjustment entries should be used for corrections.
+- Utility bill splitting is indicative and should not be considered final until the mess agrees on its sharing policy.
+- All settlement calculations should be verified against the mess's agreed accounting rules.
+Before using MessMate in a real environment:
+1. Replace demo admin credentials.
+2. Configure a strong production JWT secret.
+3. Enable HTTPS.
+4. Configure secure authentication and session handling.
+5. Set a restricted CORS allowlist.
+6. Configure database backups.
+7. Add an email provider for password resets and invitations.
+8. Run database migrations and automated tests in CI.
+9. Verify accounting calculations with the mess treasurer.
+MessMate is a runnable full-stack MVP foundation.
 
-## Student accounts
-Students can create an account from the sign-in screen using the mess invite code. The demo seed uses `MESSMATE-JOIN`; replace this with a private code before deployment and share it only with your mess members. Registration creates a linked member profile.
+It provides the core workflows for mess management, meal tracking, expense monitoring, member accounts, and monthly settlements. It is not an audited accounting system, so financial calculations should be validated before real-world use.
+Developed as a Full-Stack Web Application Project.
