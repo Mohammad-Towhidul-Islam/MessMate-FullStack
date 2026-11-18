@@ -104,9 +104,19 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const [registerMode, setRegisterMode] = useState(false);
+  const [authMode, setAuthMode] = useState(() =>
+    new URLSearchParams(window.location.search).has('join') ? 'join' : 'login'
+  ); // login | join | create
   const [regName, setRegName] = useState('');
-  const [joinCode, setJoinCode] = useState('');
+  const [joinCode, setJoinCode] = useState(() =>
+    new URLSearchParams(window.location.search).get('join') || ''
+  );
+  const [messName, setMessName] = useState('');
+  const [workspaceInfo, setWorkspaceInfo] = useState(null);
+  const [inviteInfo, setInviteInfo] = useState(null);
+  const [capacityInput, setCapacityInput] = useState('6');
+  const [newMember, setNewMember] = useState({ name: '', phone: '' });
+  const [memberActionBusy, setMemberActionBusy] = useState(false);
 
   const [market, setMarket] = useState({
     date: ymd(now.getFullYear(), now.getMonth(), now.getDate()),
@@ -144,6 +154,8 @@ export default function App() {
     localStorage.removeItem('mm_token');
     setToken('');
     setUser(null);
+    setWorkspaceInfo(null);
+    setInviteInfo(null);
     setMembers([]);
     setMeals([]);
     setTransactions([]);
@@ -230,9 +242,22 @@ export default function App() {
 
       setUser({
         ...me.user,
-        memberId: me.user.member?.id || null
+        memberId: me.user.memberId || me.user.member?.id || null
       });
       setMembers(memberData);
+      const capacityData = await request('/members/capacity', currentToken);
+      setWorkspaceInfo(capacityData);
+      setCapacityInput(String(capacityData.maxMembers));
+      if (me.user.role === 'ADMIN') {
+        try {
+          const inviteData = await request('/auth/invite', currentToken);
+          setInviteInfo(inviteData);
+        } catch {
+          setInviteInfo(null);
+        }
+      } else {
+        setInviteInfo(null);
+      }
       setMeals(mealData);
       setTransactions(transactionData);
       await loadActivity(1, currentToken);
@@ -261,13 +286,13 @@ export default function App() {
   async function login(e) {
     e.preventDefault();
     setError('');
+    setNotice('');
 
     try {
       const result = await request('/auth/login', null, {
         method: 'POST',
         body: JSON.stringify({ email, password })
       });
-
       localStorage.setItem('mm_token', result.token);
       setToken(result.token);
       setUser(result.user);
@@ -279,18 +304,36 @@ export default function App() {
   async function registerStudent(e) {
     e.preventDefault();
     setError('');
+    setNotice('');
 
     try {
       const result = await request('/auth/register', null, {
         method: 'POST',
+        body: JSON.stringify({ name: regName, email, password, joinCode })
+      });
+      localStorage.setItem('mm_token', result.token);
+      setToken(result.token);
+      setUser(result.user);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  async function createMess(e) {
+    e.preventDefault();
+    setError('');
+    setNotice('');
+
+    try {
+      const result = await request('/auth/create-mess', null, {
+        method: 'POST',
         body: JSON.stringify({
           name: regName,
+          messName,
           email,
-          password,
-          joinCode
+          password
         })
       });
-
       localStorage.setItem('mm_token', result.token);
       setToken(result.token);
       setUser(result.user);
@@ -442,6 +485,121 @@ export default function App() {
       setError(e.message);
     } finally {
       setSavingMember(false);
+    }
+  }
+
+
+  async function refreshWorkspaceDetails() {
+    const capacity = await request('/members/capacity', token);
+    setWorkspaceInfo(capacity);
+    setCapacityInput(String(capacity.maxMembers));
+    if (isAdmin) {
+      const invite = await request('/auth/invite', token);
+      setInviteInfo(invite);
+    }
+  }
+
+  async function updateCapacity(e) {
+    e.preventDefault();
+    const maxMembers = Number(capacityInput);
+    if (!Number.isInteger(maxMembers) || maxMembers < 1 || maxMembers > 500) {
+      setError('Capacity must be a whole number between 1 and 500.');
+      return;
+    }
+    setMemberActionBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await request('/members/capacity', token, {
+        method: 'PATCH',
+        body: JSON.stringify({ maxMembers })
+      });
+      await refreshWorkspaceDetails();
+      setNotice('Workspace capacity updated successfully.');
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setMemberActionBusy(false);
+    }
+  }
+
+  async function addManualMember(e) {
+    e.preventDefault();
+    setMemberActionBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await request('/members', token, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: newMember.name.trim(),
+          phone: newMember.phone.trim() || null
+        })
+      });
+      setNewMember({ name: '', phone: '' });
+      await load();
+      setNotice('Member added successfully. This record does not create a login account.');
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setMemberActionBusy(false);
+    }
+  }
+
+  async function changeMemberStatus(member, action) {
+    const label = action === 'deactivate' ? 'deactivate' : 'reactivate';
+    if (!window.confirm(`Are you sure you want to ${label} ${member.name}?`)) return;
+    setMemberActionBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await request(`/members/${member.id}/${action}`, token, { method: 'PATCH' });
+      await load();
+      setNotice(`Member ${action === 'deactivate' ? 'deactivated' : 'reactivated'} successfully.`);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setMemberActionBusy(false);
+    }
+  }
+
+  async function transferAdmin(member) {
+    if (!member.user?.id || !member.active || !member.user.active) {
+      setError('Admin transfer requires an active member with a registered account.');
+      return;
+    }
+    if (!window.confirm(`Transfer Admin role to ${member.name}? You will lose Admin access and need to sign in again.`)) return;
+    setMemberActionBusy(true);
+    setError('');
+    try {
+      await request(`/members/${member.id}/transfer-admin`, token, { method: 'POST' });
+      logout();
+      setNotice('Admin role transferred. Please sign in again.');
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setMemberActionBusy(false);
+    }
+  }
+
+  async function copyInviteCode() {
+    if (!inviteInfo?.inviteCode) return;
+    try {
+      await navigator.clipboard.writeText(inviteInfo.inviteCode);
+      setNotice('Invite code copied. Share it with the person joining your mess.');
+    } catch {
+      setError('Could not copy automatically. Please select and copy the invite code.');
+    }
+  }
+
+  async function copyInviteLink() {
+    if (!inviteInfo?.inviteCode) return;
+    const link = `${window.location.origin}/?join=${encodeURIComponent(inviteInfo.inviteCode)}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setNotice('Invite link copied. Share it with the person joining your mess.');
+    } catch {
+      setError(`Copy this invite link: ${link}`);
     }
   }
 
@@ -686,6 +844,7 @@ export default function App() {
   }
 
   if (!token) {
+    const submitting = authMode === 'login' ? login : authMode === 'join' ? registerStudent : createMess;
     return (
       <main className="login-wrap">
         <section className="login-split">
@@ -693,116 +852,80 @@ export default function App() {
             <div className="login-brand">
               <div className="login-brand-icon">M</div>
               <div>
-                <h2 className="login-brand-name">
-                  Mess<span>Mate</span>
-                </h2>
-                <p className="login-brand-tagline">
-                  Mess Management Platform
-                </p>
+                <h2 className="login-brand-name">Mess<span>Mate</span></h2>
+                <p className="login-brand-tagline">Mess Management Platform</p>
               </div>
             </div>
-
-            <p className="login-left-caption">
-              Manage daily meals, market costs and member accounts in one place.
-            </p>
+            <p className="login-left-caption">Manage daily meals, market costs and member accounts in one place.</p>
           </div>
 
           <div className="login-right">
-            <form
-              className="login-card"
-              onSubmit={registerMode ? registerStudent : login}
-            >
+            <form className="login-card" onSubmit={submitting}>
               <h1>
-                {registerMode ? (
-                  <>Create <span>Account</span></>
-                ) : (
-                  <>Welcome <span>Back</span></>
-                )}
+                {authMode === 'login' ? <>Welcome <span>Back</span></> :
+                  authMode === 'join' ? <>Join a <span>Mess</span></> :
+                  <>Create a <span>Mess</span></>}
               </h1>
-
               <p className="muted">
-                {registerMode
-                  ? 'Create your student account to join your mess.'
-                  : 'Sign in to manage your mess.'}
+                {authMode === 'login' ? 'Sign in to manage your mess.' :
+                  authMode === 'join' ? 'Create your account and join with an invite code.' :
+                  'Create a new workspace. You will become its Admin.'}
               </p>
 
-              {registerMode && (
-                <label>
-                  Full name
-                  <input
-                    type="text"
-                    value={regName}
-                    onChange={e => setRegName(e.target.value)}
-                    placeholder="Enter your full name"
-                    autoComplete="name"
-                    required
-                    minLength="2"
-                  />
+              {authMode !== 'login' && (
+                <label>Full name
+                  <input type="text" value={regName} onChange={e => setRegName(e.target.value)}
+                    placeholder="Enter your full name" autoComplete="name" required minLength="2" maxLength="80" />
                 </label>
               )}
 
-              <label>
-                Email
-                <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  autoComplete="email"
-                  required
-                />
+              {authMode === 'create' && (
+                <label>Mess name
+                  <input type="text" value={messName} onChange={e => setMessName(e.target.value)}
+                    placeholder="e.g. Green Residence Mess" required minLength="2" maxLength="80" />
+                </label>
+              )}
+
+              <label>Email
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                  placeholder="Enter your email" autoComplete="email" required />
               </label>
 
-              <label>
-                Password
-                <input
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  autoComplete={registerMode ? 'new-password' : 'current-password'}
-                  required
-                  minLength="8"
-                />
+              <label>Password
+                <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                  placeholder="At least 8 characters" autoComplete={authMode === 'login' ? 'current-password' : 'new-password'}
+                  required minLength="8" />
               </label>
 
-              {registerMode && (
-                <label>
-                  Mess invite code
-                  <input
-                    value={joinCode}
-                    onChange={e => setJoinCode(e.target.value)}
-                    placeholder="Enter your mess invite code"
-                    required
-                  />
+              {authMode === 'join' && (
+                <label>Mess invite code
+                  <input value={joinCode} onChange={e => setJoinCode(e.target.value)}
+                    placeholder="Enter your mess invite code" required />
                 </label>
               )}
 
               {error && <p className="error">{error}</p>}
 
               <button className="primary full" type="submit">
-                {registerMode ? 'Create account' : 'Sign in'}
+                {authMode === 'login' ? 'Sign in' : authMode === 'join' ? 'Join mess' : 'Create mess'}
               </button>
 
-              {!registerMode && (
-                <div className="login-divider">
-                  Don’t have an account?
-                </div>
+              <div className="login-divider">{authMode === 'login' ? 'New to MessMate?' : 'Already have an account?'}</div>
+              {authMode !== 'login' && (
+                <button type="button" className="secondary-btn full" onClick={() => { setAuthMode('login'); setError(''); }}>
+                  Back to sign in
+                </button>
               )}
-
-              <button
-                type="button"
-                className="secondary-btn full"
-                onClick={() => {
-                  setRegisterMode(!registerMode);
-                  setError('');
-                }}
-              >
-                {registerMode
-                  ? 'Already have an account? Sign in'
-                  : 'Create an account'}
-              </button>
-
+              {authMode === 'login' && (
+                <>
+                  <button type="button" className="secondary-btn full" onClick={() => { setAuthMode('create'); setError(''); }}>
+                    Create a new mess
+                  </button>
+                  <button type="button" className="secondary-btn full" onClick={() => { setAuthMode('join'); setError(''); }}>
+                    Join an existing mess
+                  </button>
+                </>
+              )}
             </form>
           </div>
         </section>
@@ -832,7 +955,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="mess-label">WORKSPACE</div>
+        <div className="mess-label">{workspaceInfo?.name || user?.mess || 'WORKSPACE'}</div>
         
 
         {navigation.map(([name, Icon]) => (
@@ -1856,97 +1979,105 @@ export default function App() {
           )}
 
           {page === 'Members' && canManage && (
-            <div className="panel">
-              <h3>Members ({members.length})</h3>
-              <p className="muted">Edit a member's name or phone number. Existing meal records will remain unchanged.</p>
+            <div className="members-page" style={{ display: 'grid', gap: '18px' }}>
+              <div className="panel">
+                <h3>{workspaceInfo?.name || user?.mess || 'Workspace'} · Members</h3>
+                <p className="muted">Active members: {workspaceInfo?.activeMembers ?? members.filter(m => m.active).length} / {workspaceInfo?.maxMembers ?? '—'} · Available slots: {workspaceInfo?.availableSlots ?? '—'}</p>
+                {isAdmin && (
+                  <form onSubmit={updateCapacity} className="entry-form" style={{ marginTop: '12px' }}>
+                    <label>Maximum members
+                      <input type="number" min="1" max="500" step="1" value={capacityInput}
+                        onChange={e => setCapacityInput(e.target.value)} required />
+                    </label>
+                    <button className="primary" disabled={memberActionBusy}>Update capacity</button>
+                  </form>
+                )}
+              </div>
 
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Phone</th>
-                      <th>Status</th>
-                      <th>Joined</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
+              {isAdmin && (
+                <div className="panel">
+                  <h3>Invite members</h3>
+                  <p className="muted">Share this code with people who should create an account and join this workspace.</p>
+                  {inviteInfo ? (
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <code style={{ padding: '10px 14px', borderRadius: '8px', background: 'var(--input-bg, #f2f4f7)', fontSize: '1rem' }}>{inviteInfo.inviteCode}</code>
+                      <button type="button" className="secondary-btn" onClick={copyInviteCode}>Copy code</button>
+                      <button type="button" className="secondary-btn" onClick={copyInviteLink}>Copy share link</button>
+                    </div>
+                  ) : <p className="muted">Invite information is unavailable. Refresh and try again.</p>}
+                </div>
+              )}
 
-                  <tbody>
-                    {members.map(member => (
-                      <tr key={member.id}>
-                        <td>
-                          {editingMemberId === member.id ? (
-                            <input
-                              type="text"
-                              value={editMemberForm.name}
-                              onChange={e => setEditMemberForm(v => ({ ...v, name: e.target.value }))}
-                              minLength="2"
-                              maxLength="80"
-                              autoFocus
-                              aria-label="Member name"
-                            />
-                          ) : (
-                            <b>{member.name}</b>
-                          )}
-                        </td>
-                        <td>
-                          {editingMemberId === member.id ? (
-                            <input
-                              type="tel"
-                              value={editMemberForm.phone}
-                              onChange={e => setEditMemberForm(v => ({ ...v, phone: e.target.value }))}
-                              maxLength="30"
-                              placeholder="Phone number"
-                              aria-label="Member phone"
-                            />
-                          ) : (
-                            member.phone || '—'
-                          )}
-                        </td>
-                        <td>{member.active ? 'Active' : 'Inactive'}</td>
-                        <td>
-                          {member.joinedAt ? new Date(member.joinedAt).toLocaleDateString() : '—'}
-                        </td>
-                        <td>
-                          {editingMemberId === member.id ? (
-                            <div className="member-edit-actions" style={{ display: 'flex', gap: '8px' }}>
-                              <button
-                                type="button"
-                                className="primary"
-                                disabled={savingMember}
-                                onClick={() => saveMemberEdit(member.id)}
-                              >
-                                <Check size={15} /> {savingMember ? 'Saving…' : 'Save'}
-                              </button>
-                              <button
-                                type="button"
-                                className="secondary-btn"
-                                disabled={savingMember}
-                                onClick={cancelEditMember}
-                              >
-                                <X size={15} /> Cancel
-                              </button>
+              <div className="panel">
+                <h3>Add an offline member</h3>
+                <p className="muted">This creates a member record only. To let someone sign in, share the invite code above and ask them to register.</p>
+                <form onSubmit={addManualMember} className="entry-form">
+                  <label>Name
+                    <input value={newMember.name} onChange={e => setNewMember(v => ({ ...v, name: e.target.value }))}
+                      minLength="2" maxLength="80" required placeholder="Member name" />
+                  </label>
+                  <label>Phone (optional)
+                    <input value={newMember.phone} onChange={e => setNewMember(v => ({ ...v, phone: e.target.value }))}
+                      maxLength="30" placeholder="Phone number" />
+                  </label>
+                  <button className="primary" disabled={memberActionBusy}>Add member</button>
+                </form>
+              </div>
+
+              <div className="panel">
+                <h3>Members ({members.length})</h3>
+                <p className="muted">Editing a member's name or phone number does not change their meal history.</p>
+                <div className="table-wrap">
+                  <table>
+                    <thead><tr><th>Name</th><th>Phone</th><th>Account / Role</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
+                    <tbody>
+                      {members.map(member => (
+                        <tr key={member.id}>
+                          <td>
+                            {editingMemberId === member.id ? (
+                              <input type="text" value={editMemberForm.name}
+                                onChange={e => setEditMemberForm(v => ({ ...v, name: e.target.value }))}
+                                minLength="2" maxLength="80" autoFocus aria-label="Member name" />
+                            ) : <b>{member.name}</b>}
+                          </td>
+                          <td>
+                            {editingMemberId === member.id ? (
+                              <input type="tel" value={editMemberForm.phone}
+                                onChange={e => setEditMemberForm(v => ({ ...v, phone: e.target.value }))}
+                                maxLength="30" placeholder="Phone number" aria-label="Member phone" />
+                            ) : (member.phone || '—')}
+                          </td>
+                          <td>{member.user ? `${member.user.email} · ${member.user.role}` : 'No login account'}</td>
+                          <td>{member.active ? 'Active' : 'Inactive'}</td>
+                          <td>{member.joinedAt ? new Date(member.joinedAt).toLocaleDateString() : '—'}</td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                              {editingMemberId === member.id ? (
+                                <>
+                                  <button type="button" className="primary" disabled={savingMember} onClick={() => saveMemberEdit(member.id)}><Check size={14} /> Save</button>
+                                  <button type="button" className="secondary-btn" disabled={savingMember} onClick={cancelEditMember}><X size={14} /> Cancel</button>
+                                </>
+                              ) : (
+                                <button type="button" className="secondary-btn" onClick={() => startEditMember(member)}><Pencil size={14} /> Edit</button>
+                              )}
+                              {isAdmin && member.user?.role !== 'ADMIN' && (
+                                member.active ? (
+                                  <button type="button" className="secondary-btn" disabled={memberActionBusy} onClick={() => changeMemberStatus(member, 'deactivate')}>Deactivate</button>
+                                ) : (
+                                  <button type="button" className="secondary-btn" disabled={memberActionBusy} onClick={() => changeMemberStatus(member, 'activate')}>Reactivate</button>
+                                )
+                              )}
+                              {isAdmin && member.user?.role !== 'ADMIN' && member.user?.active && member.active && (
+                                <button type="button" className="secondary-btn" disabled={memberActionBusy} onClick={() => transferAdmin(member)}>Transfer Admin</button>
+                              )}
                             </div>
-                          ) : (
-                            <button
-                              type="button"
-                              className="secondary-btn"
-                              onClick={() => startEditMember(member)}
-                            >
-                              <Pencil size={15} /> Edit
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                    {members.length === 0 && (
-                      <tr>
-                        <td colSpan="5" className="muted">No members found.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                          </td>
+                        </tr>
+                      ))}
+                      {members.length === 0 && <tr><td colSpan="6" className="muted">No members found.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
