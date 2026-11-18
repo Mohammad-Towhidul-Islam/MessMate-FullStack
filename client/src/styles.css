@@ -366,18 +366,13 @@ button:focus-visible, select:focus-visible, input:focus-visible {
 
 }
 
-.icon-btn:hover, .secondary-btn:hover {
-
-  background: #f4f2ff;
-
-  border-color: #d8d2ff;
-
-  box-shadow: 0 6px 16px rgba(78, 65, 180, .09);
-
-  transform: translateY(-1px);
-
+.icon-btn:hover,
+.secondary-btn:hover {
+  background: transparent !important;
+  border-color: inherit;
+  box-shadow: none;
+  transform: none;
 }
-
 .primary {
 
   background: linear-gradient(135deg, #7164ef, #5548d2);
