@@ -6,7 +6,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
-
+import activityRoutes from './routes/activity.js';
 import { auth } from './middleware/auth.js';
 import { notFound, errorHandler } from './middleware/errors.js';
 
@@ -122,6 +122,7 @@ app.get('/api/health', (req, res) => {
 // =====================================
 
 app.use('/api', auth);
+app.use('/api/activity', activityRoutes);
 
 app.use('/api/dashboard', dashboardRoutes);
 

@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   CalendarDays, Wallet, Users, LogOut, RefreshCw, Menu,
   Sun, Moon, Download, ChevronLeft, ChevronRight,
-  Home, Utensils, ShoppingBasket, Receipt, ArrowUpRight, Clock, Pencil, Check, X
+  Home, Utensils, ShoppingBasket, Receipt, ArrowUpRight, Clock, Pencil, Check, X,
+  History, Undo2, Redo2
 } from 'lucide-react';
 const API =
   import.meta.env.VITE_API_URL ||
@@ -70,6 +71,18 @@ export default function App() {
   const [meals, setMeals] = useState([]);
   const [transactions, setTransactions] = useState([]);
 
+  // Shared meal activity history
+  const [activities, setActivities] = useState([]);
+  const [activityPagination, setActivityPagination] = useState({
+    page: 1,
+    limit: 30,
+    total: 0,
+    totalPages: 0
+  });
+  const [activityBusyId, setActivityBusyId] = useState(null);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState('');
+
   const [editingTransactionId, setEditingTransactionId] = useState(null);
   const [editTransactionForm, setEditTransactionForm] = useState({
     amount: '',
@@ -134,6 +147,71 @@ export default function App() {
     setMembers([]);
     setMeals([]);
     setTransactions([]);
+    setActivities([]);
+    setActivityPagination({
+      page: 1,
+      limit: 30,
+      total: 0,
+      totalPages: 0
+    });
+  }
+
+  async function loadActivity(pageNumber = 1, currentToken = token) {
+    if (!currentToken) return;
+
+    setActivityLoading(true);
+    setActivityError('');
+
+    try {
+      const result = await request(
+        `/activity?page=${pageNumber}&limit=30&entity=MEAL`,
+        currentToken
+      );
+
+      setActivities(result.activities || []);
+      setActivityPagination(result.pagination || {
+        page: pageNumber,
+        limit: 30,
+        total: 0,
+        totalPages: 0
+      });
+    } catch (e) {
+      setActivityError(e.message || 'Unable to load activity history.');
+    } finally {
+      setActivityLoading(false);
+    }
+  }
+
+  async function runActivityAction(activity, action) {
+    if (!activity?.id || activityBusyId) return;
+
+    const actionLabel = action === 'undo' ? 'Undo' : 'Redo';
+    const confirmed = window.confirm(
+      `${actionLabel} this meal activity? A new history record will be created.`
+    );
+
+    if (!confirmed) return;
+
+    setActivityBusyId(activity.id);
+    setError('');
+    setNotice('');
+
+    try {
+      const result = await request(
+        `/activity/${activity.id}/${action}`,
+        token,
+        { method: 'POST' }
+      );
+
+      setNotice(result.message || `${actionLabel} completed successfully.`);
+      await load();
+      await loadActivity(activityPagination.page);
+    } catch (e) {
+      setError(e.message);
+      await loadActivity(activityPagination.page);
+    } finally {
+      setActivityBusyId(null);
+    }
   }
 
   async function load(currentToken = token) {
@@ -157,6 +235,7 @@ export default function App() {
       setMembers(memberData);
       setMeals(mealData);
       setTransactions(transactionData);
+      await loadActivity(1, currentToken);
 
       if (!deposit.memberId && memberData.length) {
         setDeposit(v => ({ ...v, memberId: memberData[0].id }));
@@ -734,6 +813,7 @@ export default function App() {
   const navigation = [
     ['Home', Home],
     ['Monthly Sheet', CalendarDays],
+    ['Activity History', History],
     ...(canManage ? [['Deposits & Market', Wallet], ['Members', Users]] : [])
   ];
 
@@ -1593,6 +1673,184 @@ export default function App() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {page === 'Activity History' && (
+            <div className="activity-page">
+              <div className="activity-intro panel">
+                <div className="activity-intro-icon"><History size={22} /></div>
+                <div>
+                  <h3>Shared meal activity</h3>
+                  <p className="muted">
+                    Everyone in this mess can view this history. You can undo or redo only your own meal changes.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="secondary-btn activity-refresh"
+                  onClick={() => loadActivity(activityPagination.page)}
+                  disabled={activityLoading}
+                >
+                  <RefreshCw size={15} className={activityLoading ? 'activity-spin' : ''} />
+                  Refresh
+                </button>
+              </div>
+
+              {activityError && (
+                <div className="alert">{activityError}</div>
+              )}
+
+              <div className="panel activity-list-panel">
+                <div className="activity-list-heading">
+                  <div>
+                    <h3>Activity History</h3>
+                    <p className="muted">
+                      {activityPagination.total} recorded meal activities
+                    </p>
+                  </div>
+                  <span className="activity-shared-label">
+                    <Users size={14} /> Shared with mess
+                  </span>
+                </div>
+
+                {activityLoading && activities.length === 0 ? (
+                  <div className="activity-empty">
+                    <RefreshCw size={22} className="activity-spin" />
+                    <p>Loading activity history…</p>
+                  </div>
+                ) : activities.length ? (
+                  <div className="activity-list">
+                    {activities.map(activity => {
+                      const action = String(activity.action || '').toUpperCase();
+                      const metadata = activity.metadata || {};
+                      const snapshot = metadata.after || metadata.before || {};
+                      const actorName = activity.actor?.name || 'Unknown user';
+                      const canUndo = activity.isMine &&
+                        ['CREATE', 'UPDATE', 'DELETE', 'RESTORE'].includes(action);
+                      const canRedo = activity.isMine && action === 'UNDO';
+                      const dateLabel = activity.createdAt
+                        ? new Date(activity.createdAt).toLocaleString('en-GB', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })
+                        : '';
+
+                      return (
+                        <article className="activity-item" key={activity.id}>
+                          <div className={`activity-action-icon action-${action.toLowerCase()}`}>
+                            {action === 'UNDO' ? <Undo2 size={18} /> :
+                              action === 'REDO' ? <Redo2 size={18} /> :
+                              <Utensils size={18} />}
+                          </div>
+
+                          <div className="activity-main">
+                            <div className="activity-title-row">
+                              <div>
+                                <span className={`activity-action-badge action-badge-${action.toLowerCase()}`}>
+                                  {action}
+                                </span>
+                                <b className="activity-actor">{actorName}</b>
+                                {!activity.isMine && (
+                                  <span className="activity-owner-label">Other member</span>
+                                )}
+                              </div>
+                              <time>{dateLabel}</time>
+                            </div>
+
+                            <p className="activity-description">
+                              {action === 'CREATE' && 'created a meal entry'}
+                              {action === 'UPDATE' && 'updated a meal entry'}
+                              {action === 'DELETE' && 'deleted a meal entry'}
+                              {action === 'RESTORE' && 'restored a meal entry'}
+                              {action === 'UNDO' && 'undid a meal change'}
+                              {action === 'REDO' && 'redid a meal change'}
+                              {!['CREATE', 'UPDATE', 'DELETE', 'RESTORE', 'UNDO', 'REDO'].includes(action) &&
+                                'performed a meal activity'}
+                              {snapshot.memberId && (
+                                <> · {members.find(m => m.id === snapshot.memberId)?.name || 'Member'}</>
+                              )}
+                              {snapshot.date && (
+                                <> · {new Date(snapshot.date).toLocaleDateString('en-GB', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric',
+                                  timeZone: 'UTC'
+                                })}</>
+                              )}
+                              {snapshot.type && <> · {snapshot.type}</>}
+                              {snapshot.quantity !== undefined && snapshot.quantity !== null && (
+                                <> · {Number(snapshot.quantity).toFixed(2)} meal(s)</>
+                              )}
+                            </p>
+
+                            <div className="activity-item-footer">
+                              <span className="activity-role">{activity.actor?.role || 'MEMBER'}</span>
+                              <div className="activity-controls">
+                                {canUndo && (
+                                  <button
+                                    type="button"
+                                    className="secondary-btn activity-undo-btn"
+                                    disabled={activityBusyId !== null}
+                                    onClick={() => runActivityAction(activity, 'undo')}
+                                  >
+                                    <Undo2 size={14} />
+                                    {activityBusyId === activity.id ? 'Working…' : 'Undo'}
+                                  </button>
+                                )}
+                                {canRedo && (
+                                  <button
+                                    type="button"
+                                    className="secondary-btn activity-redo-btn"
+                                    disabled={activityBusyId !== null}
+                                    onClick={() => runActivityAction(activity, 'redo')}
+                                  >
+                                    <Redo2 size={14} />
+                                    {activityBusyId === activity.id ? 'Working…' : 'Redo'}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="activity-empty">
+                    <History size={26} />
+                    <h4>No activity yet</h4>
+                    <p>Meal changes will appear here automatically.</p>
+                  </div>
+                )}
+
+                {activityPagination.totalPages > 1 && (
+                  <div className="activity-pagination">
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      disabled={activityLoading || activityPagination.page <= 1}
+                      onClick={() => loadActivity(activityPagination.page - 1)}
+                    >
+                      <ChevronLeft size={15} /> Previous
+                    </button>
+                    <span>
+                      Page {activityPagination.page} of {activityPagination.totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      disabled={activityLoading || activityPagination.page >= activityPagination.totalPages}
+                      onClick={() => loadActivity(activityPagination.page + 1)}
+                    >
+                      Next <ChevronRight size={15} />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}

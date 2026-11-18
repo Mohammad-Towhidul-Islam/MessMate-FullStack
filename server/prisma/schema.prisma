@@ -87,6 +87,9 @@ model MealEntry {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Version control for safe Undo / Redo
+  version   Int      @default(0)
+
   @@unique([memberId, date, type])
   @@index([messId, date])
 }

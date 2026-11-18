@@ -5775,3 +5775,477 @@ header {
   .login-card h1 { font-size: 27px !important; }
   .login-card input { min-height: 46px !important; }
 }
+
+
+/* =========================================================
+   MessMate — Shared Activity History
+   Added without removing or replacing existing styles.
+   ========================================================= */
+
+.activity-page {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.activity-intro {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 18px 20px;
+  border-radius: 16px;
+}
+
+.activity-intro-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 46px;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  color: #6256dc;
+  background: #efedff;
+}
+
+.activity-intro > div:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+}
+
+.activity-intro h3,
+.activity-list-heading h3 {
+  margin: 0 0 5px;
+  font-size: 16px;
+  color: #202b45;
+}
+
+.activity-intro p,
+.activity-list-heading p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.activity-refresh {
+  flex: 0 0 auto;
+}
+
+.activity-list-panel {
+  padding: 21px;
+  min-width: 0;
+}
+
+.activity-list-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 17px;
+  border-bottom: 1px solid #eceef5;
+}
+
+.activity-shared-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  padding: 8px 11px;
+  border: 1px solid #dcd8ff;
+  border-radius: 30px;
+  background: #f4f2ff;
+  color: #5d53c5;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.activity-list {
+  display: grid;
+}
+
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 2px;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.activity-item:last-child {
+  border-bottom: 0;
+}
+
+.activity-action-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  color: #6256dc;
+  background: #efedff;
+}
+
+.activity-action-icon.action-create,
+.activity-action-icon.action-restore,
+.activity-action-icon.action-redo {
+  color: #14845e;
+  background: #e7f8f0;
+}
+
+.activity-action-icon.action-update {
+  color: #2563b8;
+  background: #eaf2ff;
+}
+
+.activity-action-icon.action-delete {
+  color: #c04455;
+  background: #fff0f1;
+}
+
+.activity-action-icon.action-undo {
+  color: #b36b20;
+  background: #fff5e7;
+}
+
+.activity-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.activity-title-row > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.activity-title-row time {
+  flex: 0 0 auto;
+  color: #8992a6;
+  font-size: 11px;
+}
+
+.activity-action-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: #efedff;
+  color: #5d53c5;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .65px;
+}
+
+.activity-action-badge.action-badge-create,
+.activity-action-badge.action-badge-restore,
+.activity-action-badge.action-badge-redo {
+  color: #14734f;
+  background: #e5f7ee;
+}
+
+.activity-action-badge.action-badge-update {
+  color: #245da7;
+  background: #eaf2ff;
+}
+
+.activity-action-badge.action-badge-delete {
+  color: #b23e4e;
+  background: #fff0f1;
+}
+
+.activity-action-badge.action-badge-undo {
+  color: #a15f19;
+  background: #fff3df;
+}
+
+.activity-actor {
+  color: #27324a;
+  font-size: 13px;
+}
+
+.activity-owner-label {
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: #f1f3f8;
+  color: #778198;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.activity-description {
+  margin: 9px 0 12px;
+  color: #778198;
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.activity-item-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.activity-role {
+  color: #929aab;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .8px;
+}
+
+.activity-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.activity-undo-btn,
+.activity-redo-btn {
+  min-height: 32px;
+  padding: 7px 11px;
+  font-size: 11px;
+}
+
+.activity-undo-btn {
+  color: #a15f19;
+  border-color: #f0d8b5;
+  background: #fffaf2;
+}
+
+.activity-undo-btn:hover {
+  color: #8a4e0d;
+  border-color: #e9c48e;
+  background: #fff3df;
+}
+
+.activity-redo-btn {
+  color: #14734f;
+  border-color: #c5ead8;
+  background: #f2fbf6;
+}
+
+.activity-redo-btn:hover {
+  color: #0d6543;
+  border-color: #9ddabb;
+  background: #e5f7ee;
+}
+
+.activity-controls button:disabled,
+.activity-pagination button:disabled,
+.activity-refresh:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.activity-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 190px;
+  padding: 25px;
+  color: #929bb0;
+  text-align: center;
+}
+
+.activity-empty h4 {
+  margin: 3px 0 0;
+  color: #46516a;
+  font-size: 14px;
+}
+
+.activity-empty p {
+  margin: 0;
+  color: #929bb0;
+  font-size: 12px;
+}
+
+.activity-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding-top: 17px;
+  margin-top: 5px;
+  border-top: 1px solid #eceef5;
+}
+
+.activity-pagination > span {
+  color: #7e879c;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.activity-pagination .secondary-btn {
+  min-height: 35px;
+  padding: 8px 11px;
+}
+
+.activity-spin {
+  animation: activity-spin 1s linear infinite;
+}
+
+@keyframes activity-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Activity History dark theme */
+.dark .activity-intro,
+.dark .activity-list-panel {
+  background: #151d32;
+  border-color: #29334d;
+  color: #e8ebf5;
+}
+
+.dark .activity-intro h3,
+.dark .activity-list-heading h3,
+.dark .activity-actor {
+  color: #edf0ff;
+}
+
+.dark .activity-intro-icon {
+  color: #c4bdff;
+  background: #302d59;
+}
+
+.dark .activity-list-heading,
+.dark .activity-item,
+.dark .activity-pagination {
+  border-color: #29334d;
+}
+
+.dark .activity-shared-label {
+  color: #c7c0ff;
+  background: #29264d;
+  border-color: #454075;
+}
+
+.dark .activity-owner-label {
+  color: #aab5cc;
+  background: #26324a;
+}
+
+.dark .activity-description,
+.dark .activity-title-row time,
+.dark .activity-role,
+.dark .activity-pagination > span {
+  color: #9da9c0;
+}
+
+.dark .activity-empty h4 {
+  color: #e2e7f5;
+}
+
+.dark .activity-undo-btn {
+  color: #f3c27e;
+  border-color: #665033;
+  background: #30291f;
+}
+
+.dark .activity-undo-btn:hover {
+  background: #3a3022;
+}
+
+.dark .activity-redo-btn {
+  color: #83d8b0;
+  border-color: #315b4b;
+  background: #1c342d;
+}
+
+.dark .activity-redo-btn:hover {
+  background: #244538;
+}
+
+/* Activity History responsive layout */
+@media (max-width: 760px) {
+  .activity-intro {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    padding: 16px;
+  }
+
+  .activity-intro > div:nth-child(2) {
+    flex-basis: calc(100% - 62px);
+  }
+
+  .activity-refresh {
+    margin-left: 61px;
+  }
+
+  .activity-list-panel {
+    padding: 15px;
+  }
+
+  .activity-list-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .activity-item {
+    gap: 10px;
+    padding: 15px 0;
+  }
+
+  .activity-action-icon {
+    flex-basis: 36px;
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+  }
+
+  .activity-title-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .activity-title-row time {
+    font-size: 10px;
+  }
+
+  .activity-item-footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .activity-controls {
+    width: 100%;
+  }
+
+  .activity-pagination {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 390px) {
+  .activity-list-panel {
+    padding: 12px;
+  }
+
+  .activity-description {
+    font-size: 11px;
+  }
+
+  .activity-pagination .secondary-btn {
+    padding: 7px 8px;
+    font-size: 10px;
+  }
+
+  .activity-pagination > span {
+    font-size: 10px;
+  }
+}

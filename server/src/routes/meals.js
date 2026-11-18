@@ -4,76 +4,147 @@ import { z } from 'zod';
 import { prisma } from '../db.js';
 import { roles } from '../middleware/auth.js';
 
-const r = Router();
+const router = Router();
 
-// Convert date-only query values into UTC day boundaries.
-// Example: to=2026-11-30 includes the entire 30 November.
-function parseDateBoundary(value, endOfDay = false) {
-  if (!value) return null;
+// =====================================
+// VALIDATION
+// =====================================
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const suffix = endOfDay
-      ? 'T23:59:59.999Z'
-      : 'T00:00:00.000Z';
-
-    const date = new Date(`${value}${suffix}`);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
-
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-// Meal quantity supports 0.25, 0.50, 0.75, 1.00, etc.
 const mealSchema = z.object({
   memberId: z.string().min(1),
-  date: z.coerce.date(),
+  date: z.string().min(1),
   type: z.enum(['DAY', 'NIGHT']),
-  quantity: z.number()
-    .min(0)
-    .max(10)
-    .refine(
-      value => Math.abs(value * 4 - Math.round(value * 4)) < 0.0000001,
-      'Meal quantity must be in increments of 0.25'
-    ),
-  note: z.string().max(200).optional()
+  quantity: z.coerce.number().min(0).max(10),
+  note: z.string().max(500).nullable().optional()
 });
 
-// GET /meals?from=YYYY-MM-DD&to=YYYY-MM-DD
-// Get all meals in the selected date range.
-r.get('/', async (req, res) => {
+// =====================================
+// HELPERS
+// =====================================
+
+function parseDate(value) {
+  if (
+    typeof value !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(value)
+  ) {
+    return null;
+  }
+
+  const date = new Date(`${value}T00:00:00.000Z`);
+
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== value
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
+function makeSnapshot(meal) {
+  if (!meal) return null;
+
+  return {
+    id: meal.id,
+    messId: meal.messId,
+    memberId: meal.memberId,
+    date: meal.date.toISOString(),
+    type: meal.type,
+    quantity: Number(meal.quantity),
+    note: meal.note ?? null,
+    createdBy: meal.createdBy,
+    createdAt: meal.createdAt.toISOString(),
+    updatedAt: meal.updatedAt.toISOString(),
+    version: meal.version ?? 0
+  };
+}
+
+async function writeAudit(tx, req, action, entityId, metadata) {
+  return tx.auditLog.create({
+    data: {
+      messId: req.user.messId,
+      userId: req.user.sub,
+      action,
+      entity: 'MEAL',
+      entityId,
+      metadata
+    }
+  });
+}
+
+function canManageMeals(user) {
+  return ['ADMIN', 'MANAGER'].includes(user.role);
+}
+
+function mealUniqueWhere(memberId, date, type) {
+  return {
+    memberId_date_type: {
+      memberId,
+      date,
+      type
+    }
+  };
+}
+
+function sendConflict(res, message) {
+  return res.status(409).json({
+    error: message || 'Meal was changed by another request. Please refresh and try again.'
+  });
+}
+
+// =====================================
+// GET MEALS
+// =====================================
+
+router.get('/', async (req, res, next) => {
   try {
-    const today = new Date();
+    const { from, to } = req.query;
 
-    const fromValue = req.query.from ||
-      `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}-01`;
+    const where = {
+      messId: req.user.messId
+    };
 
-    const toValue = req.query.to ||
-      today.toISOString().slice(0, 10);
+    if (from || to) {
+      where.date = {};
 
-    const from = parseDateBoundary(String(fromValue), false);
-    const to = parseDateBoundary(String(toValue), true);
+      if (from) {
+        const fromDate = parseDate(String(from));
 
-    if (!from || !to) {
-      return res.status(400).json({
-        error: 'Invalid date range'
-      });
-    }
-
-    if (from > to) {
-      return res.status(400).json({
-        error: 'Start date cannot be after end date'
-      });
-    }
-
-    const rows = await prisma.mealEntry.findMany({
-      where: {
-        messId: req.user.messId,
-        date: {
-          gte: from,
-          lte: to
+        if (!fromDate) {
+          return res.status(400).json({
+            error: 'Invalid from date'
+          });
         }
-      },
+
+        where.date.gte = fromDate;
+      }
+
+      if (to) {
+        const toDate = parseDate(String(to));
+
+        if (!toDate) {
+          return res.status(400).json({
+            error: 'Invalid to date'
+          });
+        }
+
+        where.date.lte = toDate;
+      }
+
+      if (
+        where.date.gte &&
+        where.date.lte &&
+        where.date.gte > where.date.lte
+      ) {
+        return res.status(400).json({
+          error: 'From date cannot be after to date'
+        });
+      }
+    }
+
+    const meals = await prisma.mealEntry.findMany({
+      where,
       include: {
         member: {
           select: {
@@ -89,41 +160,47 @@ r.get('/', async (req, res) => {
       ]
     });
 
-    return res.json(rows);
-
+    res.json(meals);
   } catch (error) {
-    console.error('Get meals error:', error);
-
-    return res.status(500).json({
-      error: 'Failed to load meals'
-    });
+    next(error);
   }
 });
 
-// POST /meals
-// Add or update a member's meal entry.
-r.post('/', async (req, res) => {
+// =====================================
+// CREATE OR UPDATE MEAL
+// =====================================
+
+router.post('/', async (req, res, next) => {
   try {
     const parsed = mealSchema.safeParse(req.body);
 
     if (!parsed.success) {
       return res.status(400).json({
-        error: 'Invalid meal entry',
+        error: 'Invalid meal data',
         details: parsed.error.flatten()
       });
     }
 
-    const data = parsed.data;
+    const {
+      memberId,
+      date,
+      type,
+      quantity,
+      note
+    } = parsed.data;
 
-    if (!req.user?.messId || !req.user?.sub) {
-      return res.status(401).json({
-        error: 'Invalid user session. Please login again.'
+    const mealDate = parseDate(date);
+
+    if (!mealDate) {
+      return res.status(400).json({
+        error: 'Invalid meal date'
       });
     }
 
+    // Check active member and mess ownership.
     const member = await prisma.member.findFirst({
       where: {
-        id: data.memberId,
+        id: memberId,
         messId: req.user.messId,
         active: true
       }
@@ -131,105 +208,395 @@ r.post('/', async (req, res) => {
 
     if (!member) {
       return res.status(404).json({
-        error: 'Member not found or inactive'
+        error: 'Active member not found'
       });
     }
 
-    const settings = await prisma.messSetting.findUnique({
-      where: {
-        messId: req.user.messId
-      }
-    });
-
-    if (
-      req.user.role === 'MEMBER' &&
-      !settings?.allowMemberMealEdit
-    ) {
-      return res.status(403).json({
-        error: 'Meal editing is disabled'
-      });
-    }
-
-    const meal = await prisma.mealEntry.upsert({
-      where: {
-        memberId_date_type: {
-          memberId: data.memberId,
-          date: data.date,
-          type: data.type
+    // Members can edit only their own meals when enabled.
+    if (!canManageMeals(req.user)) {
+      const setting = await prisma.messSetting.findUnique({
+        where: {
+          messId: req.user.messId
         }
-      },
+      });
 
-      create: {
-        messId: req.user.messId,
-        memberId: data.memberId,
-        date: data.date,
-        type: data.type,
-        quantity: data.quantity,
-        note: data.note,
-        createdBy: req.user.sub
-      },
+      if (
+        !setting?.allowMemberMealEdit ||
+        member.userId !== req.user.sub
+      ) {
+        return res.status(403).json({
+          error: 'You are not allowed to edit this meal'
+        });
+      }
+    }
 
-      update: {
-        quantity: data.quantity,
-        note: data.note
-      },
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const existing = await tx.mealEntry.findUnique({
+          where: mealUniqueWhere(memberId, mealDate, type)
+        });
 
-      include: {
-        member: {
-          select: {
-            id: true,
-            name: true
+        const before = makeSnapshot(existing);
+
+        // ---------------------------------
+        // EXISTING MEAL: UPDATE
+        // ---------------------------------
+
+        if (existing) {
+          const unchanged =
+            Number(existing.quantity) === quantity &&
+            (existing.note ?? null) === (note ?? null);
+
+          if (unchanged) {
+            return tx.mealEntry.findUnique({
+              where: {
+                id: existing.id
+              },
+              include: {
+                member: {
+                  select: {
+                    id: true,
+                    name: true
+                  }
+                }
+              }
+            });
+          }
+
+          // Optimistic concurrency control.
+          // Only update if the version is still the same.
+          const updated = await tx.mealEntry.updateMany({
+            where: {
+              id: existing.id,
+              messId: req.user.messId,
+              version: existing.version
+            },
+            data: {
+              quantity,
+              note: note ?? null,
+              version: {
+                increment: 1
+              }
+            }
+          });
+
+          if (updated.count !== 1) {
+            const error = new Error(
+              'Meal was changed by another user. Refresh and try again.'
+            );
+
+            error.status = 409;
+            throw error;
           }
         }
+
+        // ---------------------------------
+        // NEW MEAL: CREATE
+        // ---------------------------------
+
+        else {
+          await tx.mealEntry.create({
+            data: {
+              messId: req.user.messId,
+              memberId,
+              date: mealDate,
+              type,
+              quantity,
+              note: note ?? null,
+              createdBy: req.user.sub,
+              version: 0
+            }
+          });
+        }
+
+        // ---------------------------------
+        // GET SAVED MEAL
+        // ---------------------------------
+
+        const savedMeal = await tx.mealEntry.findUnique({
+          where: mealUniqueWhere(memberId, mealDate, type),
+          include: {
+            member: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        });
+
+        if (!savedMeal) {
+          throw new Error('Unable to retrieve saved meal');
+        }
+
+        const after = makeSnapshot(savedMeal);
+
+        // ---------------------------------
+        // WRITE ACTIVITY HISTORY
+        // ---------------------------------
+
+        await writeAudit(
+          tx,
+          req,
+          before ? 'UPDATE' : 'CREATE',
+          savedMeal.id,
+          {
+            before,
+            after,
+            beforeVersion: before?.version ?? null,
+            afterVersion: after.version
+          }
+        );
+
+        return savedMeal;
+      },
+      {
+        isolationLevel: 'Serializable'
       }
-    });
+    );
 
-    return res.status(201).json(meal);
-
+    res.status(200).json(result);
   } catch (error) {
-    console.error('Save meal error:', error);
-
-    return res.status(500).json({
-      error: 'Failed to save meal'
-    });
-  }
-});
-
-// DELETE /meals/:id
-// Delete a meal entry (Admin/Manager only).
-r.delete('/:id', roles('ADMIN', 'MANAGER'), async (req, res) => {
-  try {
-    const meal = await prisma.mealEntry.findFirst({
-      where: {
-        id: req.params.id,
-        messId: req.user.messId
-      }
-    });
-
-    if (!meal) {
-      return res.status(404).json({
-        error: 'Meal entry not found'
-      });
+    if (
+      error.code === 'P2002' ||
+      error.code === 'P2034' ||
+      error.status === 409
+    ) {
+      return sendConflict(
+        res,
+        'Meal was changed by another request. Refresh and try again.'
+      );
     }
 
-    await prisma.mealEntry.delete({
-      where: {
-        id: meal.id
-      }
-    });
-
-    return res.json({
-      ok: true,
-      message: 'Meal entry deleted successfully'
-    });
-
-  } catch (error) {
-    console.error('Delete meal error:', error);
-
-    return res.status(500).json({
-      error: 'Failed to delete meal'
-    });
+    next(error);
   }
 });
 
-export default r;
+// =====================================
+// DELETE MEAL
+// ADMIN / MANAGER ONLY
+// =====================================
+
+router.delete(
+  '/:id',
+  roles('ADMIN', 'MANAGER'),
+  async (req, res, next) => {
+    try {
+      const result = await prisma.$transaction(
+        async (tx) => {
+          const meal = await tx.mealEntry.findFirst({
+            where: {
+              id: req.params.id,
+              messId: req.user.messId
+            }
+          });
+
+          if (!meal) {
+            return null;
+          }
+
+          const before = makeSnapshot(meal);
+
+          // Delete only if the version has not changed.
+          const deleted = await tx.mealEntry.deleteMany({
+            where: {
+              id: meal.id,
+              messId: req.user.messId,
+              version: meal.version
+            }
+          });
+
+          if (deleted.count !== 1) {
+            const error = new Error(
+              'Meal was changed by another user. Refresh and try again.'
+            );
+
+            error.status = 409;
+            throw error;
+          }
+
+          // Record deletion in activity history.
+          await writeAudit(
+            tx,
+            req,
+            'DELETE',
+            meal.id,
+            {
+              before,
+              after: null,
+              beforeVersion: meal.version,
+              afterVersion: null
+            }
+          );
+
+          return meal;
+        },
+        {
+          isolationLevel: 'Serializable'
+        }
+      );
+
+      if (!result) {
+        return res.status(404).json({
+          error: 'Meal not found'
+        });
+      }
+
+      res.json({
+        message: 'Meal deleted. It can be restored from Activity History.'
+      });
+    } catch (error) {
+      if (
+        error.code === 'P2034' ||
+        error.status === 409
+      ) {
+        return sendConflict(
+          res,
+          'Meal was changed by another request. Refresh and try again.'
+        );
+      }
+
+      next(error);
+    }
+  }
+);
+
+// =====================================
+// RESTORE DELETED MEAL
+// ADMIN / MANAGER ONLY
+// =====================================
+
+router.post(
+  '/:id/restore',
+  roles('ADMIN', 'MANAGER'),
+  async (req, res, next) => {
+    try {
+      const result = await prisma.$transaction(
+        async (tx) => {
+          const deleteLog = await tx.auditLog.findFirst({
+            where: {
+              messId: req.user.messId,
+              entity: 'MEAL',
+              entityId: req.params.id,
+              action: 'DELETE'
+            },
+            orderBy: [
+              { createdAt: 'desc' },
+              { id: 'desc' }
+            ]
+          });
+
+          if (!deleteLog?.metadata?.before) {
+            return {
+              error: 'No deleted meal record found',
+              status: 404
+            };
+          }
+
+          const data = deleteLog.metadata.before;
+
+          // Check if the meal already exists.
+          const existing = await tx.mealEntry.findUnique({
+            where: mealUniqueWhere(
+              data.memberId,
+              new Date(data.date),
+              data.type
+            )
+          });
+
+          if (existing) {
+            return {
+              error: 'A meal already exists for this member, date and type',
+              status: 409
+            };
+          }
+
+          // Check member still belongs to this mess.
+          const member = await tx.member.findFirst({
+            where: {
+              id: data.memberId,
+              messId: req.user.messId
+            }
+          });
+
+          if (!member) {
+            return {
+              error: 'Member no longer exists',
+              status: 404
+            };
+          }
+
+          // Recreate the deleted meal.
+          const restored = await tx.mealEntry.create({
+            data: {
+              id: data.id,
+              messId: req.user.messId,
+              memberId: data.memberId,
+              date: new Date(data.date),
+              type: data.type,
+              quantity: data.quantity,
+              note: data.note ?? null,
+              createdBy: data.createdBy,
+              version: (data.version ?? 0) + 1
+            },
+            include: {
+              member: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              }
+            }
+          });
+
+          // Every restore gets a new history entry.
+          await writeAudit(
+            tx,
+            req,
+            'RESTORE',
+            restored.id,
+            {
+              before: null,
+              after: makeSnapshot(restored),
+              beforeVersion: null,
+              afterVersion: restored.version,
+              restoredFromAuditLogId: deleteLog.id
+            }
+          );
+
+          return {
+            meal: restored
+          };
+        },
+        {
+          isolationLevel: 'Serializable'
+        }
+      );
+
+      if (result.error) {
+        return res.status(result.status).json({
+          error: result.error
+        });
+      }
+
+      res.json({
+        message: 'Meal restored successfully',
+        meal: result.meal
+      });
+    } catch (error) {
+      if (
+        error.code === 'P2002' ||
+        error.code === 'P2034'
+      ) {
+        return sendConflict(
+          res,
+          'A conflicting meal operation occurred. Refresh and try again.'
+        );
+      }
+
+      next(error);
+    }
+  }
+);
+
+export default router;
