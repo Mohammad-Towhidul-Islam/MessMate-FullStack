@@ -723,11 +723,6 @@ export default function App() {
                   : 'Create an account'}
               </button>
 
-              {!registerMode && (
-                <small className="muted">
-                  Demo admin: admin@messmate.local / ChangeMe123!
-                </small>
-              )}
             </form>
           </div>
         </section>

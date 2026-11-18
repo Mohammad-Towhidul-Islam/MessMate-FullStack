@@ -5116,3 +5116,528 @@ header {
     padding: 15px !important;
   }
 }
+
+
+
+/* =========================================================
+   MessMate Members Table — polished dark UI
+   Appended overrides only. Does not change API or data logic.
+   ========================================================= */
+
+/* Member list panel */
+.dark .panel:has(table) {
+  background: linear-gradient(155deg, #172139 0%, #131c31 100%) !important;
+  border: 1px solid #2b3854 !important;
+  border-radius: 18px !important;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .18) !important;
+  padding: 24px !important;
+}
+
+.dark .panel:has(table) > h3 {
+  color: #f4f6ff !important;
+  font-size: 19px !important;
+  font-weight: 800 !important;
+  letter-spacing: -.35px !important;
+  margin: 0 0 8px !important;
+}
+
+.dark .panel:has(table) > p,
+.dark .panel:has(table) .muted {
+  color: #9eacc7 !important;
+  line-height: 1.6 !important;
+}
+
+/* Table layout */
+.dark .panel:has(table) .table-wrap {
+  margin-top: 20px !important;
+  overflow-x: auto !important;
+  border: 1px solid #2b3854 !important;
+  border-radius: 13px !important;
+}
+
+.dark .panel:has(table) table {
+  width: 100% !important;
+  min-width: 760px !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  color: #e8edfb !important;
+  font-size: 13px !important;
+}
+
+.dark .panel:has(table) table thead th {
+  height: 48px !important;
+  padding: 0 16px !important;
+  background: #202d48 !important;
+  color: #9eacc7 !important;
+  border-bottom: 1px solid #34415e !important;
+  border-top: 0 !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  letter-spacing: .65px !important;
+  white-space: nowrap !important;
+}
+
+.dark .panel:has(table) table tbody td {
+  height: 68px !important;
+  padding: 12px 16px !important;
+  color: #e5eaf8 !important;
+  background: #151f35 !important;
+  border-bottom: 1px solid #293650 !important;
+  vertical-align: middle !important;
+}
+
+.dark .panel:has(table) table tbody tr:last-child td {
+  border-bottom: 0 !important;
+}
+
+.dark .panel:has(table) table tbody tr {
+  transition: background .18s ease !important;
+}
+
+.dark .panel:has(table) table tbody tr:hover td {
+  background: #1b2943 !important;
+}
+
+/* Member names and status text */
+.dark .panel:has(table) table tbody td:first-child {
+  color: #f5f7ff !important;
+  font-weight: 750 !important;
+}
+
+.dark .panel:has(table) table tbody td:nth-child(3) {
+  color: #55d6a3 !important;
+  font-weight: 700 !important;
+}
+
+/* Inputs while editing: full-size, readable, consistent */
+.dark .panel:has(table) table input,
+.dark .panel:has(table) table input[type="text"],
+.dark .panel:has(table) table input[type="tel"] {
+  display: block !important;
+  width: 100% !important;
+  min-width: 130px !important;
+  height: 42px !important;
+  padding: 0 12px !important;
+  border: 1px solid #3a4969 !important;
+  border-radius: 9px !important;
+  outline: none !important;
+  background: #101a2e !important;
+  color: #f3f6ff !important;
+  -webkit-text-fill-color: #f3f6ff !important;
+  font: inherit !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.12) !important;
+}
+
+.dark .panel:has(table) table input::placeholder {
+  color: #8290ad !important;
+  -webkit-text-fill-color: #8290ad !important;
+  opacity: 1 !important;
+}
+
+.dark .panel:has(table) table input:focus {
+  border-color: #8b7cff !important;
+  background: #172440 !important;
+  box-shadow: 0 0 0 3px rgba(139,124,255,.17) !important;
+}
+
+/* Action buttons */
+.dark .panel:has(table) table button {
+  min-height: 42px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  padding: 0 15px !important;
+  border: 1px solid #34415e !important;
+  border-radius: 11px !important;
+  background: #172139 !important;
+  color: #e8edfb !important;
+  font-size: 12px !important;
+  font-weight: 750 !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  transition: .18s ease !important;
+}
+
+.dark .panel:has(table) table button:hover {
+  transform: translateY(-1px) !important;
+  border-color: #8175ed !important;
+  background: #25264f !important;
+}
+
+.dark .panel:has(table) table button.primary,
+.dark .panel:has(table) table button[type="submit"] {
+  border-color: transparent !important;
+  background: linear-gradient(135deg, #7968f3, #5845d5) !important;
+  color: #fff !important;
+  box-shadow: 0 7px 18px rgba(92, 73, 220, .24) !important;
+}
+
+.dark .panel:has(table) table button.primary:hover,
+.dark .panel:has(table) table button[type="submit"]:hover {
+  background: linear-gradient(135deg, #8979ff, #6553e7) !important;
+}
+
+.dark .panel:has(table) table button svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+/* Light theme equivalent */
+.panel:has(table) {
+  border-radius: 18px !important;
+  overflow: hidden !important;
+}
+
+.panel:has(table) table tbody tr:hover td {
+  background: #f7f7ff !important;
+}
+
+.panel:has(table) table input {
+  min-width: 130px !important;
+  height: 42px !important;
+  padding: 0 12px !important;
+  border: 1px solid #d8ddec !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  color: #202b45 !important;
+  font-size: 13px !important;
+}
+
+/* Responsive */
+@media (max-width: 760px) {
+  .dark .panel:has(table) {
+    padding: 15px !important;
+    border-radius: 14px !important;
+  }
+
+  .dark .panel:has(table) table {
+    min-width: 700px !important;
+  }
+
+  .dark .panel:has(table) table tbody td {
+    height: 62px !important;
+    padding: 10px 12px !important;
+  }
+
+  .dark .panel:has(table) table input {
+    min-width: 115px !important;
+  }
+}
+
+
+/* =========================================================
+   FIX: Deposits & Market form sizing on tablet/mobile
+   Ensures Date, Amount, Details, Member and Note fields
+   use the full available panel width without overflow.
+   ========================================================= */
+
+.deposits-market-layout .deposits-entry-panel,
+.deposits-market-layout .deposits-history-panel {
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.deposits-market-layout .entry-form {
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.deposits-market-layout .entry-form label {
+  min-width: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.deposits-market-layout .entry-form label input,
+.deposits-market-layout .entry-form label select,
+.deposits-market-layout .entry-form label textarea {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+@media (max-width: 760px) {
+  .deposits-market-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+    gap: 14px !important;
+  }
+
+  .deposits-market-layout > .deposits-entry-panel,
+  .deposits-market-layout > .deposits-history-panel {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    padding: 15px !important;
+  }
+
+  .deposits-market-layout .entry-form {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 13px !important;
+  }
+
+  .deposits-market-layout .entry-form > *,
+  .deposits-market-layout .entry-form label,
+  .deposits-market-layout .entry-form .muted,
+  .deposits-market-layout .entry-form button.primary {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .deposits-market-layout .entry-form input,
+  .deposits-market-layout .entry-form select,
+  .deposits-market-layout .entry-form textarea {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    min-height: 46px !important;
+    box-sizing: border-box !important;
+  }
+
+  .deposits-market-layout .entry-form button.primary {
+    min-height: 48px !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .deposits-market-layout > .deposits-entry-panel,
+  .deposits-market-layout > .deposits-history-panel {
+    padding: 12px !important;
+  }
+
+  .deposits-market-layout .entry-form {
+    gap: 11px !important;
+  }
+}
+
+
+/* FINAL FIX: make every entry-form field fill the full row.
+   The previous layout-specific selector did not match this form. */
+.entry-form {
+  width: 100% !important;
+  min-width: 0 !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.entry-form > label,
+.entry-form label {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.entry-form input,
+.entry-form input[type="number"],
+.entry-form input[type="date"],
+.entry-form select,
+.entry-form textarea {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  justify-self: stretch !important;
+}
+
+/* =========================================================
+   MessMate AUTH COMPACT LAYOUT — November 2026
+   Append-only overrides: preserves dashboard and meal-sheet styling.
+   ========================================================= */
+
+.login-wrap {
+  min-height: 100svh !important;
+  padding: clamp(14px, 2.2vw, 30px) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+.login-split {
+  width: min(1220px, 100%) !important;
+  min-height: min(700px, calc(100svh - 60px)) !important;
+  grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr) !important;
+  border-radius: 30px !important;
+}
+
+.login-left {
+  padding: clamp(25px, 3vw, 42px) !important;
+  border-radius: 30px 43% 43% 30px / 30px 34% 66% 30px !important;
+}
+
+.login-left::before {
+  width: 76% !important;
+  height: 55% !important;
+  bottom: 10% !important;
+}
+
+.login-left::after {
+  width: 135px !important;
+  height: 135px !important;
+  bottom: 20% !important;
+}
+
+.login-brand { gap: 15px !important; }
+.login-brand-icon {
+  width: 66px !important;
+  height: 66px !important;
+  flex-basis: 66px !important;
+  border-radius: 19px !important;
+  font-size: 31px !important;
+}
+.login-brand-name {
+  font-size: clamp(29px, 2.7vw, 40px) !important;
+  letter-spacing: -1.4px !important;
+}
+.login-brand-tagline {
+  margin-top: 6px !important;
+  font-size: clamp(12px, 1.15vw, 16px) !important;
+}
+.login-illustration {
+  min-height: 220px !important;
+  padding: 12px 0 !important;
+}
+.login-illustration img { max-height: 330px !important; }
+.login-left-caption { font-size: 12px !important; line-height: 1.55 !important; }
+
+.login-right {
+  padding: clamp(28px, 4vw, 54px) !important;
+}
+.login-card {
+  width: min(100%, 470px) !important;
+  max-width: 470px !important;
+}
+.login-card h1 {
+  margin-bottom: 7px !important;
+  font-size: clamp(29px, 2.8vw, 40px) !important;
+  line-height: 1.1 !important;
+}
+.login-card > .muted {
+  margin-bottom: 23px !important;
+  font-size: 14px !important;
+  line-height: 1.45 !important;
+}
+.login-card label {
+  gap: 7px !important;
+  margin: 0 0 15px !important;
+  font-size: 13px !important;
+}
+.login-card input {
+  min-height: 49px !important;
+  padding: 0 17px !important;
+  border-radius: 14px !important;
+  font-size: 14px !important;
+}
+.login-card .primary {
+  min-height: 54px !important;
+  margin: 7px 0 15px !important;
+  border-radius: 15px !important;
+  font-size: 16px !important;
+}
+.login-divider {
+  margin: 5px 0 13px !important;
+  font-size: 13px !important;
+}
+.login-card .secondary-btn {
+  min-height: 49px !important;
+  padding: 10px 15px !important;
+  border-radius: 14px !important;
+  font-size: 14px !important;
+}
+.login-card small.muted {
+  margin-top: 12px !important;
+  font-size: 10px !important;
+}
+.login-card .error {
+  margin-bottom: 10px !important;
+  padding: 10px 12px !important;
+}
+
+/* Registration form: keep all four fields compact and consistent. */
+.login-card:has(input[minlength="2"]) > .muted { margin-bottom: 18px !important; }
+.login-card:has(input[minlength="2"]) label { margin-bottom: 12px !important; }
+.login-card:has(input[minlength="2"]) .primary { margin-top: 5px !important; }
+
+/* Short laptop screens: prevent the split card from becoming oversized. */
+@media (min-width: 761px) and (max-height: 800px) {
+  .login-wrap { padding: 12px 20px !important; }
+  .login-split { min-height: min(650px, calc(100svh - 24px)) !important; }
+  .login-left { padding: 25px 30px !important; }
+  .login-right { padding: 24px 36px !important; }
+  .login-illustration { min-height: 150px !important; }
+  .login-illustration img { max-height: 245px !important; }
+  .login-card > .muted { margin-bottom: 17px !important; }
+  .login-card label { margin-bottom: 11px !important; }
+  .login-card input { min-height: 45px !important; }
+  .login-card .primary { min-height: 49px !important; margin: 5px 0 10px !important; }
+  .login-card .secondary-btn { min-height: 45px !important; }
+}
+
+@media (max-width: 1000px) and (min-width: 761px) {
+  .login-wrap { padding: 18px !important; }
+  .login-split {
+    min-height: min(680px, calc(100svh - 36px)) !important;
+    grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr) !important;
+  }
+  .login-left { padding: 25px !important; }
+  .login-right { padding: 28px !important; }
+  .login-brand-icon {
+    width: 58px !important; height: 58px !important; flex-basis: 58px !important;
+    font-size: 27px !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .login-wrap {
+    display: block !important;
+    min-height: 100svh !important;
+    padding: 12px !important;
+    overflow: auto !important;
+  }
+  .login-split {
+    width: 100% !important;
+    min-height: 0 !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    border-radius: 22px !important;
+  }
+  .login-left {
+    min-height: 145px !important;
+    padding: 22px !important;
+    border-radius: 22px 22px 34% 10% / 22px 22px 15% 10% !important;
+  }
+  .login-left::before { width: 60% !important; height: 55% !important; }
+  .login-left::after { width: 85px !important; height: 85px !important; }
+  .login-brand { gap: 12px !important; }
+  .login-brand-icon {
+    width: 50px !important; height: 50px !important; flex-basis: 50px !important;
+    border-radius: 14px !important; font-size: 24px !important;
+  }
+  .login-brand-name { font-size: 28px !important; }
+  .login-brand-tagline { margin-top: 4px !important; font-size: 11px !important; }
+  .login-illustration, .login-left-caption { display: none !important; }
+  .login-right { padding: 25px 20px 28px !important; }
+  .login-card { max-width: 520px !important; }
+  .login-card h1 { font-size: 30px !important; }
+  .login-card > .muted { margin-bottom: 20px !important; font-size: 13px !important; }
+  .login-card label { margin-bottom: 13px !important; font-size: 12px !important; }
+  .login-card input { min-height: 47px !important; border-radius: 12px !important; }
+  .login-card .primary { min-height: 51px !important; border-radius: 13px !important; }
+  .login-card .secondary-btn { min-height: 47px !important; border-radius: 13px !important; }
+}
+
+@media (max-width: 390px) {
+  .login-wrap { padding: 8px !important; }
+  .login-left { min-height: 125px !important; padding: 17px !important; }
+  .login-right { padding: 22px 16px 24px !important; }
+  .login-card h1 { font-size: 27px !important; }
+  .login-card > .muted { margin-bottom: 17px !important; }
+}
