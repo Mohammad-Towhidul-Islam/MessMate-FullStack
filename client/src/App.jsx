@@ -4,8 +4,9 @@ import {
   Sun, Moon, Download, ChevronLeft, ChevronRight,
   Home, Utensils, ShoppingBasket, Receipt, ArrowUpRight, Clock, Pencil, Check, X
 } from 'lucide-react';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+const API =
+  import.meta.env.VITE_API_URL ||
+  'https://messmate-api-bd.vercel.app/api';
 
 const money = n =>
   `৳${Number(n || 0).toLocaleString('en-BD', {
