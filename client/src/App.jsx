@@ -405,9 +405,9 @@ export default function App() {
     )
     .reduce((sum, t) => sum + Number(t.amount), 0);
 
-  const totalExpenses = totalMarket + utilityTotal + otherExpenses;
-
-  const cashPosition = totalDeposits - totalExpenses;
+  // Cash balance is calculated after market expenses only.
+  // Utility bills and other non-market expenses are tracked separately.
+  const cashPosition = totalDeposits - totalMarket;
 
   const mealRate = totalMeals > 0
     ? totalMarket / totalMeals
@@ -1105,9 +1105,9 @@ export default function App() {
                 </div>
                 <div className="home-stat-card stat-cash">
                   <span className="home-stat-icon"><ArrowUpRight size={20} /></span>
-                  <small>Cash after expenses</small>
+                  <small>Cash after market</small>
                   <strong>{money(cashPosition)}</strong>
-                  <span className="home-stat-note">Deposits minus all expenses</span>
+                  <span className="home-stat-note">Deposits minus market expense; utilities separate</span>
                 </div>
               </div>
 
@@ -1264,7 +1264,7 @@ export default function App() {
                   <b>{money(totalDeposits)}</b>
                 </div>
                 <div>
-                  <small>Cash after expenses</small>
+                  <small>Cash after market</small>
                   <b>{money(cashPosition)}</b>
                 </div>
               </div>
