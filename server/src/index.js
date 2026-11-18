@@ -18,54 +18,145 @@ import dashboardRoutes from './routes/dashboard.js';
 
 const app = express();
 
-// Security and middleware
+// =====================================
+// CORS CONFIGURATION
+// =====================================
+
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'https://messmate-fullstack-eight.vercel.app'
+];
+
+// Add additional origins from environment variable
+if (process.env.CLIENT_ORIGIN) {
+  const extraOrigins = process.env.CLIENT_ORIGIN
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean);
+
+  allowedOrigins.push(...extraOrigins);
+}
+
+const corsOptions = {
+  origin: (origin, callback) => {
+
+    // Allow requests without an Origin header
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    console.log('CORS blocked origin:', origin);
+
+    return callback(null, false);
+  },
+
+  methods: [
+    'GET',
+    'POST',
+    'PUT',
+    'PATCH',
+    'DELETE',
+    'OPTIONS'
+  ],
+
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization'
+  ]
+};
+
+// =====================================
+// SECURITY MIDDLEWARE
+// =====================================
+
 app.use(helmet());
 
-app.use(cors({
-  origin: process.env.CLIENT_ORIGIN?.split(',') || 'http://localhost:5173'
+app.use(cors(corsOptions));
+
+app.use(express.json({
+  limit: '1mb'
 }));
 
-app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({
+  extended: true
+}));
+
 app.use(morgan('combined'));
 
-// Authentication routes
+// =====================================
+// AUTHENTICATION ROUTES
+// =====================================
+
 app.use(
   '/api/auth',
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    limit: 50
+    limit: 50,
+    standardHeaders: true,
+    legacyHeaders: false
   }),
   authRoutes
 );
 
-// Health check
+// =====================================
+// HEALTH CHECK
+// =====================================
+
 app.get('/api/health', (req, res) => {
-  res.json({
+
+  res.status(200).json({
     ok: true,
-    service: 'messmate-api'
+    service: 'messmate-api',
+    message: 'MessMate Backend is running'
   });
+
 });
 
-// Protected routes
+// =====================================
+// PROTECTED API ROUTES
+// =====================================
+
 app.use('/api', auth);
 
 app.use('/api/dashboard', dashboardRoutes);
+
 app.use('/api/members', memberRoutes);
+
 app.use('/api/meals', mealRoutes);
+
 app.use('/api/transactions', transactionRoutes);
 
-// Error handling
+// =====================================
+// ERROR HANDLING
+// =====================================
+
 app.use(notFound);
+
 app.use(errorHandler);
 
-// Local development server
-if (!process.env.VERCEL) {
-  const port = process.env.PORT || 4000;
+// =====================================
+// LOCAL DEVELOPMENT SERVER
+// =====================================
 
-  app.listen(port, () => {
-    console.log(`MessMate API listening on ${port}`);
+if (!process.env.VERCEL) {
+
+  const PORT = process.env.PORT || 4000;
+
+  app.listen(PORT, () => {
+    console.log(
+      `MessMate API listening on port ${PORT}`
+    );
   });
+
 }
 
-// Export Express app for Vercel
+// =====================================
+// EXPORT FOR VERCEL
+// =====================================
+
 export default app;
