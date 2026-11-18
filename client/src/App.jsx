@@ -70,6 +70,14 @@ export default function App() {
   const [meals, setMeals] = useState([]);
   const [transactions, setTransactions] = useState([]);
 
+  const [editingTransactionId, setEditingTransactionId] = useState(null);
+  const [editTransactionForm, setEditTransactionForm] = useState({
+    amount: '',
+    description: '',
+    date: ''
+  });
+  const [savingTransaction, setSavingTransaction] = useState(false);
+
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -354,6 +362,79 @@ export default function App() {
       setError(e.message);
     } finally {
       setSavingMember(false);
+    }
+  }
+
+  function startEditTransaction(transaction) {
+    setEditingTransactionId(transaction.id);
+    setEditTransactionForm({
+      amount: String(transaction.amount),
+      description: transaction.description || '',
+      date: dateKey(transaction.transactionDate)
+    });
+    setError('');
+    setNotice('');
+  }
+
+  function cancelEditTransaction() {
+    setEditingTransactionId(null);
+    setEditTransactionForm({ amount: '', description: '', date: '' });
+  }
+
+  async function saveTransactionEdit(id) {
+    const amount = Number(editTransactionForm.amount);
+    const description = editTransactionForm.description.trim();
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError('Amount must be greater than zero.');
+      return;
+    }
+    if (description.length < 2 || description.length > 240) {
+      setError('Description must be between 2 and 240 characters.');
+      return;
+    }
+    if (!editTransactionForm.date) {
+      setError('Please select a transaction date.');
+      return;
+    }
+
+    setSavingTransaction(true);
+    setError('');
+    setNotice('');
+    try {
+      await request(`/transactions/${id}`, token, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          amount,
+          description,
+          transactionDate: editTransactionForm.date
+        })
+      });
+      cancelEditTransaction();
+      await load();
+      setNotice('Transaction updated successfully.');
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSavingTransaction(false);
+    }
+  }
+
+  async function deleteTransaction(id) {
+    if (!isAdmin) return;
+    const confirmed = window.confirm(
+      'Are you sure you want to reverse this transaction? It will be excluded from the accounts.'
+    );
+    if (!confirmed) return;
+
+    setError('');
+    setNotice('');
+    try {
+      await request(`/transactions/${id}/reverse`, token, { method: 'POST' });
+      await load();
+      setNotice('Transaction reversed successfully.');
+    } catch (e) {
+      setError(e.message);
     }
   }
 
@@ -1416,6 +1497,7 @@ export default function App() {
                         <th>Category</th>
                         <th>Details</th>
                         <th>Amount</th>
+                        <th>Action</th>
                       </tr>
                     </thead>
 
@@ -1423,17 +1505,95 @@ export default function App() {
                       {monthTransactions.map(t => (
                         <tr key={t.id}>
                           <td>
-                            {new Date(t.transactionDate).toLocaleDateString()}
+                            {editingTransactionId === t.id ? (
+                              <input
+                                type="date"
+                                value={editTransactionForm.date}
+                                onChange={e => setEditTransactionForm(v => ({ ...v, date: e.target.value }))}
+                              />
+                            ) : (
+                              new Date(t.transactionDate).toLocaleDateString()
+                            )}
                           </td>
                           <td>{t.type}</td>
                           <td>{t.category || '—'}</td>
                           <td>
-                            {t.description}
-                            {t.member?.name ? ` · ${t.member.name}` : ''}
+                            {editingTransactionId === t.id ? (
+                              <input
+                                value={editTransactionForm.description}
+                                onChange={e => setEditTransactionForm(v => ({ ...v, description: e.target.value }))}
+                                maxLength={240}
+                                aria-label="Transaction description"
+                              />
+                            ) : (
+                              <>
+                                {t.description}
+                                {t.member?.name ? ` · ${t.member.name}` : ''}
+                              </>
+                            )}
                           </td>
-                          <td>{money(t.amount)}</td>
+                          <td>
+                            {editingTransactionId === t.id ? (
+                              <input
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                value={editTransactionForm.amount}
+                                onChange={e => setEditTransactionForm(v => ({ ...v, amount: e.target.value }))}
+                                aria-label="Transaction amount"
+                              />
+                            ) : (
+                              money(t.amount)
+                            )}
+                          </td>
+                          <td>
+                            {editingTransactionId === t.id ? (
+                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                <button
+                                  type="button"
+                                  className="primary"
+                                  disabled={savingTransaction}
+                                  onClick={() => saveTransactionEdit(t.id)}
+                                >
+                                  <Check size={14} /> {savingTransaction ? 'Saving…' : 'Save'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="secondary-btn"
+                                  disabled={savingTransaction}
+                                  onClick={cancelEditTransaction}
+                                >
+                                  <X size={14} /> Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                <button
+                                  type="button"
+                                  className="secondary-btn"
+                                  onClick={() => startEditTransaction(t)}
+                                >
+                                  <Pencil size={14} /> Edit
+                                </button>
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    className="secondary-btn"
+                                    onClick={() => deleteTransaction(t.id)}
+                                  >
+                                    Delete
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </td>
                         </tr>
                       ))}
+                      {monthTransactions.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="muted">No transactions found.</td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
