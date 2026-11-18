@@ -83,9 +83,10 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [mobile, setMobile] = useState(false);
 
-  // Accounting year starts in November 2026
-  const [month, setMonth] = useState(10);
-  const [year, setYear] = useState(2026);
+  // Automatically show the current month and year when the app opens.
+  // Users can still navigate to any other month/year manually.
+  const [month, setMonth] = useState(() => new Date().getMonth());
+  const [year, setYear] = useState(() => new Date().getFullYear());
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
